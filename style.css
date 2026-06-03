@@ -1,0 +1,118 @@
+/* 基礎重置與 iOS 風格設定 */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    -webkit-tap-highlight-color: transparent; /* 點擊時不要有奇怪的藍色閃爍 */
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: #ffffff;
+    color: #1c1c1e;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+/* 頂部導航 */
+.app-header {
+    display: flex;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background: #fff;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.header-actions {
+    display: flex;
+    gap: 16px;
+}
+
+.icon-btn {
+    background: none;
+    border: none;
+    font-size: 20px;
+    color: #1c1c1e;
+    cursor: pointer;
+}
+
+/* 主要內容區 */
+#app-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 20px 20px 20px;
+}
+
+/* 大分類標題 (如：蝦品) */
+.category-title {
+    font-size: 28px;
+    font-weight: 800;
+    margin: 10px 0 20px 0;
+}
+
+/* 小分類標題 (如：鞋子、衣服) */
+.subcategory-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 16px 0 8px 0;
+    color: #333;
+}
+
+/* 預覽卡片設計 */
+.link-card {
+    background-color: #e5e5ea; /* 淺灰色背景 */
+    border-radius: 16px;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.card-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+    padding-right: 12px;
+}
+
+.card-title {
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.card-source {
+    font-size: 12px;
+    color: #8e8e93;
+}
+
+.card-image {
+    width: 48px;
+    height: 48px;
+    border-radius: 8px;
+    background-color: #d1d1d6; /* 圖片載入前的佔位色 */
+    object-fit: cover;
+}
+
+/* 底部工具列 */
+.app-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 30px 24px 30px; /* 底部留白給 iPhone 的橫條 */
+    background: #f9f9f9;
+    border-top: 1px solid #e5e5ea;
+}
+
+.edit-btn {
+    background-color: #f2f2f7;
+    border: none;
+    border-radius: 12px;
+    padding: 10px;
+    font-size: 18px;
+}
