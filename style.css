@@ -1,9 +1,12 @@
-/* 基礎重置與 iOS 風格設定 */
+/* =========================================
+   1. 基礎重置與 iOS 風格設定
+   ========================================= */
 * {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
-    -webkit-tap-highlight-color: transparent; /* 點擊時不要有奇怪的藍色閃爍 */
+    -webkit-tap-highlight-color: transparent;
+    /* 點擊時不要有奇怪的藍色閃爍 */
 }
 
 body {
@@ -15,15 +18,88 @@ body {
     height: 100vh;
 }
 
-/* 頂部導航 */
+/* =========================================
+   2. 登入與註冊畫面 (iOS 質感設計)
+   ========================================= */
+#login-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    /* 讓整個表單在手機螢幕上垂直置中 */
+    padding: 20px;
+    max-width: 400px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+.login-form {
+    width: 100%;
+}
+
+.login-form input {
+    width: 100%;
+    padding: 16px;
+    margin-bottom: 16px;
+    background-color: #f2f2f7;
+    /* iOS 輸入框經典灰 */
+    border: 1px solid transparent;
+    /* 預留邊框位置避免 focus 時跳動 */
+    border-radius: 12px;
+    font-size: 16px;
+    /* 防止 iOS Safari 點擊時自動放大畫面 */
+    color: #1c1c1e;
+    outline: none;
+    transition: all 0.2s ease;
+}
+
+.login-form input:focus {
+    border: 1px solid #007AFF;
+    /* 點擊時出現 iOS 經典藍色邊框 */
+    background-color: #ffffff;
+}
+
+.login-form input::placeholder {
+    color: #8e8e93;
+}
+
+.login-form button {
+    width: 100%;
+    padding: 16px;
+    background-color: #1c1c1e;
+    /* 呼應整體字體顏色的深色按鈕 */
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 17px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 8px;
+    transition: opacity 0.2s;
+}
+
+.login-form button:active {
+    opacity: 0.7;
+    /* 點擊時的回饋感 */
+}
+
+/* =========================================
+   3. 頂部導航 (App Header)
+   ========================================= */
 .app-header {
     display: flex;
     justify-content: space-between;
+    align-items: center;
     padding: 16px 20px;
-    background: #fff;
+    background: rgba(255, 255, 255, 0.9);
+    /* 微微透明感 */
+    backdrop-filter: blur(10px);
+    /* iOS 毛玻璃特效 */
     position: sticky;
     top: 0;
     z-index: 10;
+    border-bottom: 1px solid #f2f2f7;
+    /* 淡淡的底線分隔 */
 }
 
 .header-actions {
@@ -39,7 +115,19 @@ body {
     cursor: pointer;
 }
 
-/* 主要內容區 */
+.logout-btn {
+    background: none;
+    border: none;
+    color: #FF3B30;
+    /* iOS 警告紅 */
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+/* =========================================
+   4. 主要內容區 (Cards & Typography)
+   ========================================= */
 #app-content {
     flex: 1;
     overflow-y: auto;
@@ -63,7 +151,8 @@ body {
 
 /* 預覽卡片設計 */
 .link-card {
-    background-color: #e5e5ea; /* 淺灰色背景 */
+    background-color: #e5e5ea;
+    /* 淺灰色背景 */
     border-radius: 16px;
     padding: 12px 16px;
     margin-bottom: 12px;
@@ -95,16 +184,20 @@ body {
     width: 48px;
     height: 48px;
     border-radius: 8px;
-    background-color: #d1d1d6; /* 圖片載入前的佔位色 */
+    background-color: #d1d1d6;
+    /* 圖片載入前的佔位色 */
     object-fit: cover;
 }
 
-/* 底部工具列 */
+/* =========================================
+   5. 底部工具列 (Footer)
+   ========================================= */
 .app-footer {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 12px 30px 24px 30px; /* 底部留白給 iPhone 的橫條 */
+    padding: 12px 30px 24px 30px;
+    /* 底部留白給 iPhone 的橫條 */
     background: #f9f9f9;
     border-top: 1px solid #e5e5ea;
 }

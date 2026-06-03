@@ -1,9 +1,10 @@
 import os
 from dotenv import load_dotenv
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from datetime import datetime
+from werkzeug.security import generate_password_hash, check_password_hash
 
 load_dotenv() # 載入 .env 檔案中的環境變數
 
@@ -48,9 +49,58 @@ class Link(db.Model):
 
 # ================= API 路由設計 =================
 
+# ================= 登入與註冊系統 =================
+
+@app.route('/api/register', methods=['POST'])
+def register():
+    data = request.json
+    
+    # 1. 檢查通關密語 (防護機制)
+    if data.get('invite_code') != os.getenv('INVITE_CODE'):
+        return {"error": "註冊碼錯誤，拒絕註冊！"}, 403
+
+    # 2. 檢查帳號是否已經存在
+    if User.query.filter_by(username=data.get('username')).first():
+        return {"error": "這個帳號已經被註冊過囉！"}, 400
+
+    # 3. 密碼加密並存入資料庫
+    hashed_password = generate_password_hash(data.get('password'))
+    new_user = User(username=data.get('username'), password_hash=hashed_password)
+    
+    db.session.add(new_user)
+    db.session.commit()
+    
+    return {"message": "帳號建立成功！"}, 201
+
+
+@app.route('/api/login', methods=['POST'])
+def login():
+    data = request.json
+    
+    # 1. 去資料庫尋找這個帳號
+    user = User.query.filter_by(username=data.get('username')).first()
+
+    # 2. 驗證帳號存在，且密碼的 Hash 吻合
+    if user and check_password_hash(user.password_hash, data.get('password')):
+        return {
+            "message": "登入成功！", 
+            "username": user.username
+        }, 200
+    else:
+        return {"error": "帳號或密碼錯誤"}, 401
+
 @app.route('/')
 def home():
-    return "Hello, this is the backend for the Link Management App!"
+    return send_file('index.html')
+
+@app.route('/<path:filename>')
+def serve_static(filename):
+    # 允許 Flask 順便提供同資料夾下的 css 和 js 檔案給網頁使用
+    # ⚠️ 安全白名單：我們只允許讀取特定檔案，防止駭客讀取到你的 .env 密碼檔！
+    allowed_files = ['style.css', 'app.js', 'manifest.json', 'icon-192.png']
+    if filename in allowed_files:
+        return send_file(filename)
+    return {"error": "找不到檔案或沒有讀取權限"}, 404
 
 # 1. 取得所有分類與連結 (供前端網頁顯示)
 @app.route('/api/categories', methods=['GET'])
