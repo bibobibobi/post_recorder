@@ -154,6 +154,23 @@ def add_link():
     
     return jsonify({"message": "Link added successfully", "id": new_link.id}), 201
 
+# 刪除連結
+@app.route('/api/links/<int:link_id>', methods=['DELETE'])
+def delete_link(link_id):
+    # 利用傳入的 link_id 去資料庫尋找該筆資料 (假設你的資料表類別叫做 Link)
+    link_to_delete = Link.query.get(link_id)
+    
+    if not link_to_delete:
+        return {"error": "找不到該連結"}, 404
+        
+    try:
+        db.session.delete(link_to_delete)
+        db.session.commit()
+        return {"message": "刪除成功！"}, 200
+    except Exception as e:
+        db.session.rollback() # 發生錯誤時退回，保護資料庫
+        return {"error": str(e)}, 500
+
 # 初始化資料庫 (僅第一次執行時需要)
 @app.route("/api/init-db", methods=['GET'])
 def init_db():

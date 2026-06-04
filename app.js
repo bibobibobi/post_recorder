@@ -127,75 +127,252 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 
-// 負責從後端 API 抓取資料並渲染到畫面上
+// ================= 抓取與渲染資料 =================
 async function fetchAndRenderApp() {
-    const container = document.getElementById('app-content');
+    const appContent = document.getElementById('app-content');
 
-    // 1. 顯示載入中的提示 (在資料還沒回來前，讓使用者知道程式正在努力中)
-    container.innerHTML = '<p>資料載入中...</p>';
+    // 1. 載入中的過場動畫 (提升 UX)
+    appContent.innerHTML = '<p style="text-align: center; margin-top: 50px; color: #8e8e93;">正在載入你的珍藏...</p>';
 
     try {
-        // 2. 向 Flask API 發送 GET 請求
         const response = await fetch('http://127.0.0.1:5002/api/categories');
+        const data = await response.json();
 
-        if (!response.ok) {
-            throw new Error(`伺服器錯誤！狀態碼：${response.status}`);
+        // 2. 防呆：確保拿到的是陣列 (避免後端格式改變導致 forEach 壞掉)
+        const categories = Array.isArray(data) ? data : (data.categories || []);
+
+        // 3. 空狀態提示 (Empty State)
+        if (categories.length === 0) {
+            appContent.innerHTML = `
+                <div style="text-align: center; margin-top: 80px; color: #8e8e93;">
+                    <div style="font-size: 48px; margin-bottom: 16px;">🗂️</div>
+                    <h3>目前還沒有任何收藏</h3>
+                    <p style="margin-top: 8px;">點擊右上角的「新增」來加入你的第一個連結吧！</p>
+                </div>`;
+            return;
         }
-
-        // 3. 將回傳的結果解析為 JSON 物件陣列
-        const categoriesData = await response.json();
-        console.log("🎉 成功從後端取得資料：", categoriesData);
 
         let htmlContent = '';
 
-        // 4. 開始組裝 HTML (因為後端通常會回傳多個大分類，所以最外層多加了一層迴圈)
-        categoriesData.forEach(category => {
-            // 這裡假設 Flask 回傳的欄位名稱是 name，如果有出入可自行修改
-            htmlContent += `<h1 class="category-title">${category.name}</h1>`;
+        // 4. 開始組裝畫面 (層層防呆)
+        categories.forEach(category => {
+            const catName = category.name || category.categoryName || "未命名大分類";
+            htmlContent += `<h1 class="category-title">${catName}</h1>`;
 
-            // 檢查這個大分類有沒有小分類 (防呆機制)
             if (category.subcategories && category.subcategories.length > 0) {
                 category.subcategories.forEach(sub => {
-                    htmlContent += `<h2 class="subcategory-title">${sub.name}</h2>`;
+                    const subName = sub.name || "未命名小分類";
+                    htmlContent += `<h2 class="subcategory-title">${subName}</h2>`;
 
-                    // 檢查這個小分類有沒有連結 (防呆機制)
                     if (sub.links && sub.links.length > 0) {
                         sub.links.forEach(link => {
-                            // Python 後端通常習慣用底線命名 (image_url)，JS 習慣用駝峰 (imageUrl)
-                            // 這裡做個雙重相容，並加上預設圖片的防護
-                            const imageUrl = link.image_url || link.imageUrl || "https://via.placeholder.com/48";
+                            const linkTitle = link.title || "無標題";
+                            const linkSource = link.source || "未提供";
+                            const linkUrl = link.url || "#";
+                            const linkId = link.id; // 確保有抓到資料庫裡的 ID
 
                             htmlContent += `
-                                <div class="link-card">
+                            <div class="swipe-container">
+                                
+                                <div class="swipe-content link-card" style="margin-bottom: 0;">
                                     <div class="card-info">
-                                        <div class="card-title">${link.title}</div>
-                                        <div class="card-source">${link.source}</div>
+                                        <div class="card-title">${linkTitle}</div>
+                                        <div class="card-source">${linkSource}</div>
                                     </div>
-                                    <img src="${imageUrl}" alt="預覽圖" class="card-image">
+                                    <a href="${linkUrl}" target="_blank" style="text-decoration: none;">
+                                        <div class="card-image" style="display:flex; justify-content:center; align-items:center; background:#d1d1d6; color:#fff; font-size:12px; border-radius:8px;">前往</div>
+                                    </a>
                                 </div>
+
+                                <div class="swipe-actions">
+                                    <button onclick="deleteLink(${linkId})">刪除</button>
+                                </div>
+                                
+                            </div>
                             `;
                         });
                     } else {
-                        htmlContent += `<p style="color: #999; font-size: 0.9em; margin-left: 10px;">目前尚無連結</p>`;
+                        htmlContent += `<p style="color: #8e8e93; font-size: 14px; margin-bottom: 16px; margin-left: 10px;">這裡目前沒有連結喔</p>`;
                     }
                 });
+            } else {
+                htmlContent += `<p style="color: #8e8e93; font-size: 14px; margin-bottom: 16px; margin-left: 10px;">此分類下尚無內容</p>`;
             }
         });
 
-        // 5. 注入到 HTML 中
-        // 如果資料庫完全沒資料，給予友善提示
-        if (htmlContent === '') {
-            container.innerHTML = '<p>目前資料庫沒有任何分類喔！</p>';
-        } else {
-            container.innerHTML = htmlContent;
-        }
+        // 5. 將最終結果印到畫面上
+        appContent.innerHTML = htmlContent;
+
+        enableDragScroll(); // 啟動拖曳滑動功能
 
     } catch (error) {
-        // 如果 Flask 沒開，或是網路斷線，就會跑到這裡
-        console.error("抓取資料失敗 😢：", error);
-        container.innerHTML = `<p style="color: red;">載入失敗，請確認 Flask 伺服器是否已啟動。</p>`;
+        // 6. 錯誤捕捉 (如果真的又壞了，至少會在畫面上告訴你，而不是白畫面)
+        console.error("載入失敗：", error);
+        appContent.innerHTML = '<p style="text-align: center; color: #FF3B30; margin-top: 50px;">連線異常，請打開 F12 檢查 Console 錯誤！</p>';
     }
 }
 
 // 網頁載入完成後，自動執行抓取與渲染函式
 document.addEventListener('DOMContentLoaded', fetchAndRenderApp);
+
+// ================= 新增連結功能 =================
+
+// 1. 打開視窗並向後端抓取分類資料
+async function openAddModal() {
+    document.getElementById('add-modal').style.display = 'flex';
+    const selectEl = document.getElementById('new-subcategory');
+    selectEl.innerHTML = '<option value="" disabled selected>載入分類中...</option>';
+
+    try {
+        // 跟我們一開始寫的渲染邏輯一樣，去跟 Flask 拿分類清單
+        const response = await fetch('http://127.0.0.1:5002/api/categories');
+        const categoriesData = await response.json();
+
+        selectEl.innerHTML = '<option value="" disabled selected>請選擇要放入的分類</option>';
+
+        // 利用 optgroup 標籤，把小分類歸類在大分類底下
+        categoriesData.forEach(category => {
+            if (category.subcategories && category.subcategories.length > 0) {
+                const optGroup = document.createElement('optgroup');
+                optGroup.label = `📁 ${category.name}`;
+
+                category.subcategories.forEach(sub => {
+                    const option = document.createElement('option');
+                    option.value = sub.id; // 資料庫需要的是小分類的 ID
+                    option.textContent = sub.name;
+                    optGroup.appendChild(option);
+                });
+
+                selectEl.appendChild(optGroup);
+            }
+        });
+    } catch (error) {
+        console.error("載入分類失敗：", error);
+        selectEl.innerHTML = '<option value="" disabled>無法載入分類，請檢查連線</option>';
+    }
+}
+
+// 2. 關閉視窗並清空輸入框
+function closeAddModal() {
+    document.getElementById('add-modal').style.display = 'none';
+    document.getElementById('add-link-form').reset();
+}
+
+// 3. 處理表單送出
+async function submitNewLink(event) {
+    event.preventDefault(); // 阻擋 HTML 表單預設的重整網頁行為
+
+    // 收集輸入框的值
+    const title = document.getElementById('new-title').value;
+    const url = document.getElementById('new-url').value;
+    const source = document.getElementById('new-source').value || '未提供';
+    const subcategoryId = document.getElementById('new-subcategory').value;
+
+    if (!subcategoryId) {
+        alert('請先選擇一個分類喔！');
+        return;
+    }
+
+    try {
+        const response = await fetch('http://127.0.0.1:5002/api/links', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                title: title,
+                url: url,
+                source: source,
+                subcategory_id: parseInt(subcategoryId) // 轉成數字傳給後端
+            })
+        });
+
+        if (response.ok) {
+            // 新增成功：關閉視窗並重新抓取一次最新資料來更新畫面
+            closeAddModal();
+            fetchAndRenderApp();
+        } else {
+            const res = await response.json();
+            alert('新增失敗：' + (res.error || '未知錯誤'));
+        }
+    } catch (error) {
+        console.error("儲存失敗：", error);
+        alert('連線錯誤，請確認 Flask 伺服器是否運作中。');
+    }
+}
+
+// ================= 刪除連結功能 =================
+async function deleteLink(linkId) {
+    // 加入原生確認視窗，避免誤觸
+    if (!confirm("確定要刪除這個收藏嗎？")) return;
+
+    try {
+        const response = await fetch(`http://127.0.0.1:5002/api/links/${linkId}`, {
+            method: 'DELETE'
+        });
+
+        if (response.ok) {
+            // 刪除成功後，自動重新抓取資料，畫面就會瞬間更新
+            fetchAndRenderApp();
+        } else {
+            const res = await response.json();
+            alert("刪除失敗：" + (res.error || "未知錯誤"));
+        }
+    } catch (error) {
+        console.error("刪除發生錯誤：", error);
+        alert("連線異常，請確認伺服器是否運作中。");
+    }
+}
+
+// ================= 讓電腦滑鼠也能「拖曳滑動」 =================
+function enableDragScroll() {
+    const sliders = document.querySelectorAll('.swipe-container');
+
+    sliders.forEach(slider => {
+        let isDown = false;
+        let startX;
+        let scrollLeft;
+
+        slider.addEventListener('mousedown', (e) => {
+            isDown = true;
+            slider.style.scrollsnapType = 'none'; // 拖曳時暫時關閉 scroll-snap，手感更跟手
+            slider.style.scrollBehavior = 'auto'; // 拖曳時暫時關閉平滑滾動，手感更跟手
+            startX = e.pageX - slider.offsetLeft;
+            scrollLeft = slider.scrollLeft;
+        });
+
+        slider.addEventListener('mouseleave', () => {
+            if (isDown) smoothSnap(slider); // 如果滑鼠離開容器，且正在拖曳，則啟動平滑吸附
+            isDown = false;
+        });
+
+        slider.addEventListener('mouseup', () => {
+            if (isDown) smoothSnap(slider); // 如果滑鼠離開容器，且正在拖曳，則啟動平滑吸附
+            isDown = false;
+        });
+
+        slider.addEventListener('mousemove', (e) => {
+            if (!isDown) return;
+            e.preventDefault(); // 阻止預設的文字選取行為
+            const x = e.pageX - slider.offsetLeft;
+            const walk = (x - startX);
+            slider.scrollLeft = scrollLeft - walk;
+        });
+    });
+
+    // 負責處理「放開滑鼠後」的動畫邏輯
+    function smoothSnap(slider) {
+        slider.style.scrollBehavior = 'smooth'; // 開啟平滑滾動模式
+
+        // 如果使用者往左滑超過 40px (按鈕寬度的一半)，就自動滑開到底
+        if (slider.scrollLeft > 40) {
+            slider.scrollLeft = 80;
+        } else {
+            // 否則就自動縮回去
+            slider.scrollLeft = 0;
+        }
+
+        // 等 300 毫秒動畫跑完後，再把原生的吸附功能加回來 (防呆)
+        setTimeout(() => {
+            slider.style.scrollSnapType = 'x mandatory';
+        }, 300);
+    }
+}

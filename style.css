@@ -209,3 +209,217 @@ body {
     padding: 10px;
     font-size: 18px;
 }
+
+/* =========================================
+   6. 彈出視窗 (Modal)
+   ========================================= */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(5px);
+    /* iOS 毛玻璃背景 */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+}
+
+.modal-content {
+    background: #ffffff;
+    width: 90%;
+    max-width: 400px;
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+    animation: slideUp 0.3s ease-out;
+    /* 簡單的滑入動畫 */
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.close-btn {
+    background: #f2f2f7;
+    border: none;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    font-size: 12px;
+    color: #8e8e93;
+    cursor: pointer;
+}
+
+.add-form input,
+.add-form select {
+    width: 100%;
+    padding: 14px;
+    margin-bottom: 16px;
+    background-color: #f2f2f7;
+    border: none;
+    border-radius: 12px;
+    font-size: 16px;
+    outline: none;
+}
+
+/* 讓 select 下拉選單更有質感 */
+.add-form select {
+    appearance: none;
+    color: #1c1c1e;
+    cursor: pointer;
+}
+
+.add-form button.submit-btn {
+    width: 100%;
+    padding: 16px;
+    background-color: #007AFF;
+    /* iOS 預設藍色 */
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 17px;
+    font-weight: bold;
+    cursor: pointer;
+    margin-top: 10px;
+}
+
+.add-form button.submit-btn:active {
+    opacity: 0.8;
+}
+
+/* =========================================
+   7. 頂部按鈕統一風格 (Header Buttons)
+   ========================================= */
+.header-actions {
+    display: flex;
+    gap: 12px;
+    /* 按鈕之間的間距 */
+    align-items: center;
+}
+
+.header-btn {
+    padding: 6px 16px;
+    font-size: 15px;
+    font-weight: 600;
+    border-radius: 8px;
+    /* 統一的圓角 */
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background-color: transparent;
+    /* 背景透明 */
+}
+
+/* 「新增」按鈕的樣式 (藍色系) */
+.primary-btn {
+    color: #007AFF;
+    border: 1px solid #007AFF;
+    /* 藍色外框 */
+}
+
+.primary-btn:active {
+    background-color: #007AFF;
+    color: #ffffff;
+    /* 點擊時反白 */
+}
+
+/* 「登出」按鈕的樣式 (紅色系) */
+.danger-btn {
+    color: #FF3B30;
+    border: 1px solid #FF3B30;
+    /* 紅色外框 */
+}
+
+.danger-btn:active {
+    background-color: #FF3B30;
+    color: #ffffff;
+    /* 點擊時反白 */
+}
+
+/* =========================================
+   8. 左滑刪除特效 (Swipe to Delete)
+   ========================================= */
+.swipe-container {
+    display: flex;
+    overflow-x: auto;
+    /* 允許橫向滑動 */
+    scroll-snap-type: x mandatory;
+    /* 讓滑動有「吸附感」的黑科技 */
+    scroll-behavior: smooth;
+    -ms-overflow-style: none;
+    /* 隱藏 IE/Edge 捲軸 */
+    scrollbar-width: none;
+    /* 隱藏 Firefox 捲軸 */
+    margin-bottom: 12px;
+    border-radius: 16px;
+    background-color: transparent;
+
+    user-select: none;
+    -webkit-user-select: none;
+    /* 防止滑動時文字被選取 */
+
+    cursor: grab;
+}
+
+.swipe-container:active {
+    cursor: grabbing;
+}
+
+/* 隱藏 Chrome/Safari 橫向捲軸，讓它看起來不像網頁 */
+.swipe-container::-webkit-scrollbar {
+    display: none;
+}
+
+.swipe-content {
+    flex: 0 0 100%;
+    /* 卡片主體佔滿 100% 寬度 */
+    scroll-snap-align: start;
+    /* 吸附在左側 */
+}
+
+.swipe-actions {
+    flex: 0 0 80px;
+    scroll-snap-align: end;
+    display: flex;
+    justify-content: center;
+    align-items: stretch;
+
+    background-color: #FF3B30;
+    border-radius: 16px 16px 16px 16px;
+}
+
+.swipe-actions button {
+    background-color: transparent;
+    color: white;
+    border: none;
+    width: 100%;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 0 16px 16px 0;
+    /* 右側圓角 */
+    transition: opacity 0.2s;
+}
+
+.swipe-actions button:active {
+    opacity: 0.7;
+    /* 點擊回饋 */
+}
