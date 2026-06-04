@@ -407,10 +407,13 @@ async function renderCategoryEditList() {
 
         let html = '';
         categories.forEach(cat => {
+
+            const catName = cat.name || cat.categoryName || "未命名大分類";
+
             html += `
             <div style="background: #f9f9f9; padding: 10px 15px; border-radius: 12px; margin-bottom: 15px;">
                 <div class="edit-list-item">
-                    <div class="edit-item-name">📁 ${cat.name}</div>
+                    <div class="edit-item-name">📁 ${catName}</div>
                     <div class="action-btns">
                         <button class="edit-action-btn" onclick="renameItem('category', ${cat.id}, '${cat.name}')">重新命名</button>
                         <button class="delete-action-btn" onclick="deleteCategoryItem('category', ${cat.id})">刪除</button>
