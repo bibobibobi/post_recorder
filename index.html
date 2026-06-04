@@ -40,37 +40,61 @@
             <div class="header-actions">
                 <button onclick="openAddModal()" class="header-btn primary-btn">新增</button>
                 <button onclick="handleLogout()" class="header-btn danger-btn">登出</button>
+                <button onclick="openCategoryModal()" class="header-btn"
+                    style="color: #1c1c1e; border: 1px solid #1c1c1e;">管理分類</button>
             </div>
         </div>
+    </div>
 
-        <div id="app-content"></div>
+    <div id="app-content"></div>
 
-        <div id="add-modal" class="modal-overlay" style="display: none;">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3>新增收藏</h3>
-                    <button onclick="closeAddModal()" class="close-btn">✖</button>
-                </div>
-                <form id="add-link-form" class="add-form" onsubmit="submitNewLink(event)">
-                    <input type="text" id="new-title" placeholder="標題 (例如：超讚的穿搭筆記)" required>
-                    <input type="url" id="new-url" placeholder="網址" required>
+    <div id="add-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>新增收藏</h3>
+                <button onclick="closeAddModal()" class="close-btn">✖</button>
+            </div>
+            <form id="add-link-form" class="add-form" onsubmit="submitNewLink(event)">
+                <input type="text" id="new-title" placeholder="標題 (例如：超讚的穿搭筆記)" required>
+                <input type="url" id="new-url" placeholder="網址" required>
 
-                    <select id="new-source" required>
-                        <option value="" disabled selected>請選擇來源平台</option>
-                        <option value="Threads">Threads</option>
-                        <option value="Instagram">Instagram</option>
-                        <option value="Facebook">Facebook</option>
-                        <option value="其他">其他</option>
-                    </select>
+                <select id="new-source" required>
+                    <option value="" disabled selected>請選擇來源平台</option>
+                    <option value="Threads">Threads</option>
+                    <option value="Instagram">Instagram</option>
+                    <option value="Facebook">Facebook</option>
+                    <option value="其他">其他</option>
+                </select>
 
-                    <select id="new-subcategory" required>
-                        <option value="" disabled selected>載入中...</option>
-                    </select>
+                <select id="new-subcategory" required>
+                    <option value="" disabled selected>載入中...</option>
+                </select>
 
-                    <button type="submit" class="submit-btn">儲存連結</button>
-                </form>
+                <button type="submit" class="submit-btn">儲存連結</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="category-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content" style="max-height: 85vh; overflow-y: auto; width: 95%; max-width: 500px;">
+            <div class="modal-header"
+                style="position: sticky; top: 0; background: white; padding-bottom: 10px; border-bottom: 1px solid #eee; z-index: 10;">
+                <h3 style="margin: 0;">分類管理</h3>
+                <button onclick="closeCategoryModal()" class="close-btn">✖</button>
+            </div>
+
+            <div style="display: flex; gap: 10px; margin: 20px 0;">
+                <input type="text" id="new-category-input" placeholder="輸入新分類名稱..."
+                    style="flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #ccc; font-size: 16px;">
+                <button onclick="submitNewCategory()" class="header-btn primary-btn"
+                    style="background: #007AFF; color: white;">新增</button>
+            </div>
+
+            <div id="category-edit-list">
+                <p style="text-align: center; color: #8e8e93;">載入中...</p>
             </div>
         </div>
+    </div>
     </div>
 
     <script src="app.js"></script>

@@ -423,3 +423,60 @@ body {
     opacity: 0.7;
     /* 點擊回饋 */
 }
+
+/* =========================================
+   9. 分類管理清單樣式
+   ========================================= */
+.edit-list-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid #f2f2f7;
+}
+
+.edit-list-item:last-child {
+    border-bottom: none;
+}
+
+.edit-item-name {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1c1c1e;
+}
+
+.sub-edit-list {
+    margin-left: 20px;
+    padding-left: 15px;
+    border-left: 2px solid #e5e5ea;
+    margin-top: 10px;
+    margin-bottom: 20px;
+}
+
+.sub-edit-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+}
+
+.sub-item-name {
+    font-size: 15px;
+    color: #333;
+}
+
+.action-btns button {
+    background: none;
+    border: none;
+    font-size: 14px;
+    margin-left: 12px;
+    cursor: pointer;
+}
+
+.edit-action-btn {
+    color: #007AFF;
+}
+
+.delete-action-btn {
+    color: #FF3B30;
+}

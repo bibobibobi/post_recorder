@@ -376,3 +376,134 @@ function enableDragScroll() {
         }, 300);
     }
 }
+
+// ================= 分類管理系統 =================
+
+// 1. 打開管理視窗並載入資料
+async function openCategoryModal() {
+    document.getElementById('category-modal').style.display = 'flex';
+    await renderCategoryEditList();
+}
+
+function closeCategoryModal() {
+    document.getElementById('category-modal').style.display = 'none';
+    // 關閉時順便重整主畫面的資料，確保最新
+    fetchAndRenderApp();
+}
+
+// 2. 渲染管理清單
+async function renderCategoryEditList() {
+    const listContainer = document.getElementById('category-edit-list');
+    listContainer.innerHTML = '<p style="text-align: center;">載入中...</p>';
+
+    try {
+        const response = await fetch('http://127.0.0.1:5002/api/categories');
+        const categories = await response.json();
+
+        if (categories.length === 0) {
+            listContainer.innerHTML = '<p style="text-align: center; color: #8e8e93;">目前沒有任何分類</p>';
+            return;
+        }
+
+        let html = '';
+        categories.forEach(cat => {
+            html += `
+            <div style="background: #f9f9f9; padding: 10px 15px; border-radius: 12px; margin-bottom: 15px;">
+                <div class="edit-list-item">
+                    <div class="edit-item-name">📁 ${cat.name}</div>
+                    <div class="action-btns">
+                        <button class="edit-action-btn" onclick="renameItem('category', ${cat.id}, '${cat.name}')">重新命名</button>
+                        <button class="delete-action-btn" onclick="deleteCategoryItem('category', ${cat.id})">刪除</button>
+                    </div>
+                </div>
+                
+                <div class="sub-edit-list">
+            `;
+
+            if (cat.subcategories && cat.subcategories.length > 0) {
+                cat.subcategories.forEach(sub => {
+                    html += `
+                    <div class="sub-edit-item">
+                        <div class="sub-item-name">↳ ${sub.name}</div>
+                        <div class="action-btns">
+                            <button class="edit-action-btn" onclick="renameItem('subcategory', ${sub.id}, '${sub.name}')">修改</button>
+                            <button class="delete-action-btn" onclick="deleteCategoryItem('subcategory', ${sub.id})">刪除</button>
+                        </div>
+                    </div>
+                    `;
+                });
+            }
+
+            // 在每個小分類清單的最下方，加上「新增小分類」的快速按鈕
+            html += `
+                    <div style="margin-top: 10px; display: flex; gap: 8px;">
+                        <input type="text" id="new-sub-input-${cat.id}" placeholder="新增小分類..." style="flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #ddd;">
+                        <button onclick="submitNewSubcategory(${cat.id})" style="background: #34C759; color: white; border: none; border-radius: 6px; padding: 0 12px;">+ 加入</button>
+                    </div>
+                </div>
+            </div>
+            `;
+        });
+
+        listContainer.innerHTML = html;
+
+    } catch (error) {
+        console.error("載入分類失敗：", error);
+        listContainer.innerHTML = '<p style="color: red; text-align: center;">載入失敗</p>';
+    }
+}
+
+// 3. 呼叫 API：新增大分類
+async function submitNewCategory() {
+    const inputEl = document.getElementById('new-category-input');
+    const name = inputEl.value.trim();
+    if (!name) return alert("請輸入名稱");
+
+    await fetch('http://127.0.0.1:5002/api/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name })
+    });
+    inputEl.value = '';
+    renderCategoryEditList(); // 重新整理清單
+}
+
+// 4. 呼叫 API：新增小分類
+async function submitNewSubcategory(categoryId) {
+    const inputEl = document.getElementById(`new-sub-input-${categoryId}`);
+    const name = inputEl.value.trim();
+    if (!name) return alert("請輸入名稱");
+
+    await fetch(`http://127.0.0.1:5002/api/categories/${categoryId}/subcategories`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name })
+    });
+    renderCategoryEditList();
+}
+
+// 5. 呼叫 API：重新命名 (利用原生 prompt 對話框最輕量)
+async function renameItem(type, id, oldName) {
+    const newName = prompt("請輸入新的名稱：", oldName);
+    if (!newName || newName === oldName) return;
+
+    await fetch('http://127.0.0.1:5002/api/rename', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, id, new_name: newName })
+    });
+    renderCategoryEditList();
+}
+
+// 6. 呼叫 API：刪除分類
+async function deleteCategoryItem(type, id) {
+    const msg = type === 'category' ? "⚠️ 警告：這將會刪除該分類下的「所有小分類與連結」！確定嗎？" : "確定要刪除這個小分類嗎？";
+    if (!confirm(msg)) return;
+
+    await fetch('http://127.0.0.1:5002/api/delete_category', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, id })
+    });
+    renderCategoryEditList();
+}

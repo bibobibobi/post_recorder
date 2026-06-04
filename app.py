@@ -28,14 +28,14 @@ class Category(db.Model):
     __tablename__ = 'categories'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), nullable=False)
-    subcategories = db.relationship('Subcategory', backref='category', lazy=True)
+    subcategories = db.relationship('Subcategory', backref='category', lazy=True, cascade="all, delete-orphan")
 
 class Subcategory(db.Model):
     __tablename__ = 'subcategories'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), nullable=False)
     category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=False)
-    links = db.relationship('Link', backref='subcategory', lazy=True)
+    links = db.relationship('Link', backref='subcategory', lazy=True, cascade="all, delete-orphan")
 
 class Link(db.Model):
     __tablename__ = 'links'
@@ -49,7 +49,7 @@ class Link(db.Model):
 
 # ================= API 路由設計 =================
 
-# ================= 登入與註冊系統 =================
+# 登入與註冊系統
 
 @app.route('/api/register', methods=['POST'])
 def register():
@@ -132,7 +132,7 @@ def get_categories():
     
     return jsonify(result), 200
 
-# 2. 新增連結 (供 iOS 捷徑打 API 存入)
+# 新增連結 (供 iOS 捷徑打 API 存入)
 @app.route('/api/links', methods=['POST'])
 def add_link():
     data = request.get_json()
@@ -170,6 +170,88 @@ def delete_link(link_id):
     except Exception as e:
         db.session.rollback() # 發生錯誤時退回，保護資料庫
         return {"error": str(e)}, 500
+
+# 分類管理系統
+    #新增大分類
+@app.route('/api/categories', methods=['POST'])
+def create_category():
+    data = request.json
+    if not data or not data.get('name'):
+        return {"error": "缺少分類名稱"}, 400
+    
+    new_cat = Category(name=data['name'])
+    db.session.add(new_cat)
+    db.session.commit()
+    
+    return {"message": "分類建立成功", "id": new_cat.id}, 201
+
+    #新增子分類
+@app.route('/api/categories/<int:category_id>/subcategories', methods=['POST'])
+def create_subcategory(category_id):
+    data = request.json
+    if not data or not data.get('name'):
+        return {"error": "缺少子分類名稱"}, 400
+
+    category = Category.query.get(category_id)
+    if not category:
+        return {"error": "找不到該分類"}, 404
+
+    new_subcat = Subcategory(name=data['name'], category_id=category_id)
+    db.session.add(new_subcat)
+    db.session.commit()
+
+    return {"message": "子分類建立成功", "id": new_subcat.id}, 201
+
+    # 更新分類名稱
+@app.route('/api/rename', methods=['PUT'])
+def rename_category():
+    data = request.json
+    item_type = data.get('type') # 'category' 或 'subcategory'
+    item_id = data.get('id')
+    new_name = data.get('new_name')
+
+    if not all([item_type, item_id, new_name]):
+        return {"error": "缺少必要欄位"}, 400
+
+    if item_type == 'category':
+        item = Category.query.get(item_id)
+    elif item_type == 'subcategory':
+        item = Subcategory.query.get(item_id)
+    else:
+        return {"error": "無效的項目類型"}, 400
+
+    if not item:
+        return {"error": "找不到該項目"}, 404
+
+    item.name = new_name
+    db.session.commit()
+
+    return {"message": "名稱更新成功"}, 200
+
+    # 移除分類或子分類（連帶刪除底下的子分類或連結）
+@app.route('/api/delete_category', methods=['DELETE'])
+def delete_category():
+    data = request.json
+    item_type = data.get('type') # 'category' 或 'subcategory'
+    item_id = data.get('id')
+
+    if not all([item_type, item_id]):
+        return {"error": "缺少必要欄位"}, 400
+
+    if item_type == 'category':
+        item = Category.query.get(item_id)
+    elif item_type == 'subcategory':
+        item = Subcategory.query.get(item_id)
+    else:
+        return {"error": "無效的項目類型"}, 400
+
+    if not item:
+        return {"error": "找不到該項目"}, 404
+
+    db.session.delete(item)
+    db.session.commit()
+
+    return {"message": "刪除成功"}, 200
 
 # 初始化資料庫 (僅第一次執行時需要)
 @app.route("/api/init-db", methods=['GET'])
