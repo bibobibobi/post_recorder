@@ -66,9 +66,13 @@
                     <option value="其他">其他</option>
                 </select>
 
-                <select id="new-subcategory" required>
-                    <option value="" disabled selected>載入中...</option>
-                </select>
+                <select id="new-category-select" onchange="handleCategoryChange()" required>
+                        <option value="" disabled selected>1. 選擇大分類</option>
+                    </select>
+                    
+                    <select id="new-subcategory-select" onchange="handleSubcategoryChange()" disabled>
+                        <option value="" disabled selected>2. 請先選擇大分類</option>
+                    </select>
 
                 <button type="submit" class="submit-btn">儲存連結</button>
             </form>

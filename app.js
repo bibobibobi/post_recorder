@@ -249,43 +249,124 @@ function toggleAccordion(clickedHeader) {
 // 網頁載入完成後，自動執行抓取與渲染函式
 document.addEventListener('DOMContentLoaded', fetchAndRenderApp);
 
-// ================= 新增連結功能 =================
+// ================= 新增連結功能 (連動選單升級版) =================
 
-// 打開視窗並建立「大分類 + 小分類」的複合式選單
+// 用來暫存從後端抓回來的大分類資料，避免一直重複發送請求
+let cachedCategoriesData = [];
+
+// 1. 打開視窗並重置選單
 async function openAddModal() {
     document.getElementById('add-modal').style.display = 'flex';
-    const selectEl = document.getElementById('new-subcategory'); // 沿用原本的 ID
-    selectEl.innerHTML = '<option value="" disabled selected>載入分類中...</option>';
+    document.getElementById('add-link-form').reset(); // 清空之前的輸入
+    await refreshCategorySelects();
+}
+
+// 2. 向後端抓資料，並渲染大分類選單 (支援自動選取特定 ID)
+async function refreshCategorySelects(autoSelectCatId = null, autoSelectSubId = null) {
+    const catSelect = document.getElementById('new-category-select');
+    const subSelect = document.getElementById('new-subcategory-select');
+
+    catSelect.innerHTML = '<option value="" disabled selected>載入中...</option>';
+    subSelect.innerHTML = '<option value="" disabled selected>請先選擇大分類</option>';
+    subSelect.disabled = true;
 
     try {
         const response = await fetch('http://127.0.0.1:5002/api/categories');
-        const categoriesData = await response.json();
+        cachedCategoriesData = await response.json();
 
-        selectEl.innerHTML = '<option value="" disabled selected>請選擇存放位置</option>';
-
-        categoriesData.forEach(cat => {
-            const optGroup = document.createElement('optgroup');
-            optGroup.label = `📁 ${cat.name}`;
-
-            // 選項 1：直接放入大分類 (Value 格式：cat_大分類ID)
-            const directOpt = document.createElement('option');
-            directOpt.value = `cat_${cat.id}`;
-            directOpt.textContent = `📥 直接放入「${cat.name}」`;
-            optGroup.appendChild(directOpt);
-
-            // 選項 2：放入底下的小分類 (Value 格式：sub_大分類ID_小分類ID)
-            if (cat.subcategories && cat.subcategories.length > 0) {
-                cat.subcategories.forEach(sub => {
-                    const subOpt = document.createElement('option');
-                    subOpt.value = `sub_${cat.id}_${sub.id}`;
-                    subOpt.textContent = `↳ ${sub.name}`;
-                    optGroup.appendChild(subOpt);
-                });
-            }
-            selectEl.appendChild(optGroup);
+        catSelect.innerHTML = '<option value="" disabled selected>1. 選擇大分類</option>';
+        cachedCategoriesData.forEach(cat => {
+            const catName = cat.name || cat.categoryName;
+            catSelect.innerHTML += `<option value="${cat.id}">📁 ${catName}</option>`;
         });
+
+        // 🌟 魔法按鈕：放在選單最下方
+        catSelect.innerHTML += `<option value="ADD_NEW_CAT" style="color: #007AFF; font-weight: bold;">新增大分類...</option>`;
+
+        // 如果有指定要自動選取剛建立的大分類
+        if (autoSelectCatId) {
+            catSelect.value = autoSelectCatId;
+            handleCategoryChange(autoSelectSubId);
+        }
     } catch (error) {
-        selectEl.innerHTML = '<option value="" disabled>載入失敗</option>';
+        catSelect.innerHTML = '<option value="" disabled>載入失敗</option>';
+    }
+}
+
+// 3. 當「大分類」被改變時觸發
+async function handleCategoryChange(autoSelectSubId = null) {
+    const catSelect = document.getElementById('new-category-select');
+    const subSelect = document.getElementById('new-subcategory-select');
+    const catId = catSelect.value;
+
+    // 如果使用者點擊了「新增大分類...」
+    if (catId === "ADD_NEW_CAT") {
+        catSelect.value = ""; // 先把選單退回空白狀態
+        const name = prompt("請輸入新的「大分類」名稱：");
+        if (!name) return;
+
+        // 呼叫 API 在背景建立大分類
+        const res = await fetch('http://127.0.0.1:5002/api/categories', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: name })
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+            // 建立成功後，重新抓資料，並自動幫使用者選好剛剛建的那一個！
+            await refreshCategorySelects(data.id);
+            fetchAndRenderApp(); // 順便更新首頁背景
+        }
+        return;
+    }
+
+    // 正常選擇大分類 ➡️ 展開對應的小分類選單
+    const selectedCat = cachedCategoriesData.find(c => c.id == catId);
+    if (!selectedCat) return;
+
+    subSelect.disabled = false;
+    const catName = selectedCat.name || selectedCat.categoryName;
+    subSelect.innerHTML = `<option value="DIRECT">直接儲存在「${catName}」</option>`;
+
+    if (selectedCat.subcategories && selectedCat.subcategories.length > 0) {
+        selectedCat.subcategories.forEach(sub => {
+            subSelect.innerHTML += `<option value="${sub.id}">↳ ${sub.name}</option>`;
+        });
+    }
+
+    // 🌟 魔法按鈕：新增小分類
+    subSelect.innerHTML += `<option value="ADD_NEW_SUB" style="color: #007AFF; font-weight: bold;">新增小分類...</option>`;
+
+    if (autoSelectSubId) {
+        subSelect.value = autoSelectSubId;
+    }
+}
+
+// 4. 當「小分類」被改變時觸發
+async function handleSubcategoryChange() {
+    const catSelect = document.getElementById('new-category-select');
+    const subSelect = document.getElementById('new-subcategory-select');
+
+    // 如果使用者點擊了「新增小分類...」
+    if (subSelect.value === "ADD_NEW_SUB") {
+        subSelect.value = "DIRECT"; // 先退回直接放入
+        const name = prompt("請輸入新的「小分類」名稱：");
+        if (!name) return;
+
+        const catId = catSelect.value;
+        const res = await fetch(`http://127.0.0.1:5002/api/categories/${catId}/subcategories`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: name })
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+            // 建立成功，刷新並自動選好剛剛建的小分類！
+            await refreshCategorySelects(catId, data.id);
+            fetchAndRenderApp();
+        }
     }
 }
 
@@ -295,29 +376,27 @@ function closeAddModal() {
     document.getElementById('add-link-form').reset();
 }
 
-// 3. 處理表單送出
+// 5. 解析最終選擇並送出到後端
 async function submitNewLink(event) {
     event.preventDefault();
 
     const title = document.getElementById('new-title').value;
     const url = document.getElementById('new-url').value;
     const source = document.getElementById('new-source').value || '未提供';
-    const locationValue = document.getElementById('new-subcategory').value;
 
-    if (!locationValue) {
-        return alert('請選擇一個存放位置喔！');
+    const catSelect = document.getElementById('new-category-select');
+    const subSelect = document.getElementById('new-subcategory-select');
+
+    if (!catSelect.value || catSelect.value === "ADD_NEW_CAT") {
+        return alert('請先選擇一個大分類！');
     }
 
-    // 🌟 核心：解析前端傳來的字串，決定 category_id 和 subcategory_id
-    let categoryId = null;
+    const categoryId = parseInt(catSelect.value);
     let subcategoryId = null;
 
-    if (locationValue.startsWith('cat_')) {
-        categoryId = parseInt(locationValue.split('_')[1]); // 只有大分類
-    } else if (locationValue.startsWith('sub_')) {
-        const parts = locationValue.split('_');
-        categoryId = parseInt(parts[1]);
-        subcategoryId = parseInt(parts[2]); // 包含大分類與小分類
+    // 只要不是 DIRECT (直接放入) 或 ADD_NEW_SUB，就代表選了一個真實的小分類 ID
+    if (subSelect.value !== "DIRECT" && subSelect.value !== "ADD_NEW_SUB" && subSelect.value !== "") {
+        subcategoryId = parseInt(subSelect.value);
     }
 
     try {
@@ -335,7 +414,7 @@ async function submitNewLink(event) {
 
         if (response.ok) {
             closeAddModal();
-            fetchAndRenderApp(); // 自動刷新首頁
+            fetchAndRenderApp();
         } else {
             alert('新增失敗，請檢查網路連線。');
         }
@@ -378,7 +457,7 @@ function enableDragScroll() {
 
         slider.addEventListener('mousedown', (e) => {
             isDown = true;
-            slider.style.scrollsnapType = 'none'; // 拖曳時暫時關閉 scroll-snap，手感更跟手
+            slider.style.scrollSnapType = 'none'; // 拖曳時暫時關閉 scroll-snap，手感更跟手
             slider.style.scrollBehavior = 'auto'; // 拖曳時暫時關閉平滑滾動，手感更跟手
             startX = e.pageX - slider.offsetLeft;
             scrollLeft = slider.scrollLeft;
