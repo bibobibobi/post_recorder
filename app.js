@@ -127,7 +127,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 
-// ================= 抓取與渲染首頁 (手風琴版) =================
+// ================= 抓取與渲染首頁 (手風琴 + 標籤篩選版) =================
 async function fetchAndRenderApp() {
     const appContent = document.getElementById('app-content');
     appContent.innerHTML = '<p style="text-align: center; margin-top: 50px; color: #8e8e93;">正在載入你的珍藏...</p>';
@@ -157,33 +157,55 @@ async function fetchAndRenderApp() {
                     <span>📁 ${catName}</span>
                     <span class="arrow-icon">▼</span>
                 </button>
-                <div class="accordion-content">
+                <div class="accordion-content" style="padding-left: 0; padding-right: 0;">
             `;
 
             let hasAnyLink = false;
+            let chipsHtml = '';
+            let cardsHtml = '';
 
-            // 2. 畫出「直接屬於大分類」的連結
+            // 抓出有包含連結的小分類
+            const validSubs = cat.subcategories ? cat.subcategories.filter(sub => sub.links && sub.links.length > 0) : [];
+
+            // 2. 如果有小分類，就生成頂部的「橫向滑動篩選列」
+            if (validSubs.length > 0) {
+                chipsHtml += `<div class="filter-chips-container">`;
+                chipsHtml += `<div class="filter-chip active" onclick="filterLinks(this, 'all')">全部</div>`; // 預設全部
+
+                // 如果大分類自己也有直接的連結，加一個直屬標籤
+                if (cat.links && cat.links.length > 0) {
+                    chipsHtml += `<div class="filter-chip" onclick="filterLinks(this, 'none')">📌 直屬連結</div>`;
+                }
+
+                // 列出所有小分類標籤
+                validSubs.forEach(sub => {
+                    chipsHtml += `<div class="filter-chip" onclick="filterLinks(this, '${sub.id}')">${sub.name}</div>`;
+                });
+                chipsHtml += `</div>`;
+            }
+
+            // 3. 畫出「直接屬於大分類」的連結 (標記 subId 為 'none')
             if (cat.links && cat.links.length > 0) {
                 hasAnyLink = true;
                 cat.links.forEach(link => {
-                    htmlContent += generateLinkCard(link, null); // 呼叫卡片產生器，不傳入小分類名稱
+                    cardsHtml += generateLinkCard(link, null, 'none');
                 });
             }
 
-            // 3. 畫出「屬於小分類」的連結
-            if (cat.subcategories && cat.subcategories.length > 0) {
-                cat.subcategories.forEach(sub => {
-                    if (sub.links && sub.links.length > 0) {
-                        hasAnyLink = true;
-                        sub.links.forEach(link => {
-                            htmlContent += generateLinkCard(link, sub.name); // 傳入小分類名稱作為標籤
-                        });
-                    }
+            // 4. 畫出「屬於小分類」的連結 (標記真實的 subId)
+            if (validSubs.length > 0) {
+                validSubs.forEach(sub => {
+                    hasAnyLink = true;
+                    sub.links.forEach(link => {
+                        cardsHtml += generateLinkCard(link, sub.name, sub.id);
+                    });
                 });
             }
 
-            // 4. 空狀態提示
-            if (!hasAnyLink) {
+            // 5. 組合篩選列與卡片
+            if (hasAnyLink) {
+                htmlContent += chipsHtml + `<div class="category-cards-wrapper">` + cardsHtml + `</div>`;
+            } else {
                 htmlContent += `<p style="color: #8e8e93; font-size: 14px; text-align: center; margin: 10px 0;">此分類尚無內容</p>`;
             }
 
@@ -199,13 +221,13 @@ async function fetchAndRenderApp() {
     }
 }
 
-// 產生單一連結卡片的輔助函式 (包含左滑刪除架構)
-function generateLinkCard(link, subName) {
+// 產生單一連結卡片的輔助函式 (包含左滑刪除架構與 data-sub-id)
+function generateLinkCard(link, subName, subId) {
     // 如果有傳入小分類名稱，就生出藍色小標籤
     const tagHtml = subName ? `<div class="sub-tag">${subName}</div>` : '';
 
     return `
-    <div class="swipe-container">
+    <div class="swipe-container filterable-card" data-sub-id="${subId}">
         <div class="swipe-content link-card" style="margin-bottom: 0;">
             <div class="card-info">
                 ${tagHtml}
@@ -220,6 +242,33 @@ function generateLinkCard(link, subName) {
             <button onclick="deleteLink(${link.id})">刪除</button>
         </div>
     </div>`;
+}
+
+// ================= 標籤篩選邏輯 =================
+function filterLinks(clickedChip, targetSubId) {
+    // 1. 切換標籤的視覺狀態 (反白目前點擊的標籤)
+    const container = clickedChip.parentElement;
+    container.querySelectorAll('.filter-chip').forEach(chip => chip.classList.remove('active'));
+    clickedChip.classList.add('active');
+
+    // 2. 找到同一層級下方的卡片容器，對卡片進行過濾
+    const wrapper = container.nextElementSibling;
+    const cards = wrapper.querySelectorAll('.filterable-card');
+
+    cards.forEach(card => {
+        card.scrollLeft = 0; // 每次切換篩選都把卡片滾回最左邊，避免誤觸刪除
+        // 如果點擊「全部」，就全部顯示 (swipe-container 預設是 flex)
+        if (targetSubId === 'all') {
+            card.style.display = 'flex';
+        } else {
+            // 比對卡片身上的 data-sub-id 是否符合點擊的標籤
+            if (card.getAttribute('data-sub-id') === String(targetSubId)) {
+                card.style.display = 'flex';
+            } else {
+                card.style.display = 'none'; // 不符合的瞬間隱藏
+            }
+        }
+    });
 }
 
 // 手風琴的開關邏輯 (含自動收合其他分類)

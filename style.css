@@ -546,3 +546,42 @@ body {
     border-radius: 6px;
     margin-bottom: 6px;
 }
+
+/* =========================================
+   11. 小分類橫向篩選列 (Filter Chips)
+   ========================================= */
+.filter-chips-container {
+    display: flex;
+    overflow-x: auto;
+    gap: 8px;
+    padding: 4px 16px 16px 16px;
+    scrollbar-width: none; /* 隱藏 Firefox 捲軸 */
+    -ms-overflow-style: none; /* 隱藏 IE 捲軸 */
+}
+
+.filter-chips-container::-webkit-scrollbar {
+    display: none; /* 隱藏 Chrome/Safari 捲軸 */
+}
+
+.filter-chip {
+    white-space: nowrap; /* 文字不換行 */
+    padding: 6px 14px;
+    background-color: #f2f2f7;
+    color: #8e8e93;
+    border-radius: 16px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+/* 被選中時的樣式 (深色反白) */
+.filter-chip.active {
+    background-color: #1c1c1e;
+    color: #ffffff;
+}
+
+/* 包裝卡片的容器，用來做篩選動畫過渡 */
+.category-cards-wrapper {
+    padding: 0 16px; /* 將卡片的左右間距移到這裡統一管理 */
+}
