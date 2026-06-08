@@ -127,21 +127,15 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 
-// ================= 抓取與渲染資料 =================
+// ================= 抓取與渲染首頁 (手風琴版) =================
 async function fetchAndRenderApp() {
     const appContent = document.getElementById('app-content');
-
-    // 1. 載入中的過場動畫 (提升 UX)
     appContent.innerHTML = '<p style="text-align: center; margin-top: 50px; color: #8e8e93;">正在載入你的珍藏...</p>';
 
     try {
         const response = await fetch('http://127.0.0.1:5002/api/categories');
-        const data = await response.json();
+        const categories = await response.json();
 
-        // 2. 防呆：確保拿到的是陣列 (避免後端格式改變導致 forEach 壞掉)
-        const categories = Array.isArray(data) ? data : (data.categories || []);
-
-        // 3. 空狀態提示 (Empty State)
         if (categories.length === 0) {
             appContent.innerHTML = `
                 <div style="text-align: center; margin-top: 80px; color: #8e8e93;">
@@ -154,61 +148,101 @@ async function fetchAndRenderApp() {
 
         let htmlContent = '';
 
-        // 4. 開始組裝畫面 (層層防呆)
-        categories.forEach(category => {
-            const catName = category.name || category.categoryName || "未命名大分類";
-            htmlContent += `<h1 class="category-title">${catName}</h1>`;
+        categories.forEach(cat => {
+            const catName = cat.name || cat.categoryName || "未命名大分類";
 
-            if (category.subcategories && category.subcategories.length > 0) {
-                category.subcategories.forEach(sub => {
-                    const subName = sub.name || "未命名小分類";
-                    htmlContent += `<h2 class="subcategory-title">${subName}</h2>`;
+            // 1. 生成大分類的手風琴按鈕
+            htmlContent += `
+                <button class="accordion-header" onclick="toggleAccordion(this)">
+                    <span>📁 ${catName}</span>
+                    <span class="arrow-icon">▼</span>
+                </button>
+                <div class="accordion-content">
+            `;
 
+            let hasAnyLink = false;
+
+            // 2. 畫出「直接屬於大分類」的連結
+            if (cat.links && cat.links.length > 0) {
+                hasAnyLink = true;
+                cat.links.forEach(link => {
+                    htmlContent += generateLinkCard(link, null); // 呼叫卡片產生器，不傳入小分類名稱
+                });
+            }
+
+            // 3. 畫出「屬於小分類」的連結
+            if (cat.subcategories && cat.subcategories.length > 0) {
+                cat.subcategories.forEach(sub => {
                     if (sub.links && sub.links.length > 0) {
+                        hasAnyLink = true;
                         sub.links.forEach(link => {
-                            const linkTitle = link.title || "無標題";
-                            const linkSource = link.source || "未提供";
-                            const linkUrl = link.url || "#";
-                            const linkId = link.id; // 確保有抓到資料庫裡的 ID
-
-                            htmlContent += `
-                            <div class="swipe-container">
-                                
-                                <div class="swipe-content link-card" style="margin-bottom: 0;">
-                                    <div class="card-info">
-                                        <div class="card-title">${linkTitle}</div>
-                                        <div class="card-source">${linkSource}</div>
-                                    </div>
-                                    <a href="${linkUrl}" target="_blank" style="text-decoration: none;">
-                                        <div class="card-image" style="display:flex; justify-content:center; align-items:center; background:#d1d1d6; color:#fff; font-size:12px; border-radius:8px;">前往</div>
-                                    </a>
-                                </div>
-
-                                <div class="swipe-actions">
-                                    <button onclick="deleteLink(${linkId})">刪除</button>
-                                </div>
-                                
-                            </div>
-                            `;
+                            htmlContent += generateLinkCard(link, sub.name); // 傳入小分類名稱作為標籤
                         });
-                    } else {
-                        htmlContent += `<p style="color: #8e8e93; font-size: 14px; margin-bottom: 16px; margin-left: 10px;">這裡目前沒有連結喔</p>`;
                     }
                 });
-            } else {
-                htmlContent += `<p style="color: #8e8e93; font-size: 14px; margin-bottom: 16px; margin-left: 10px;">此分類下尚無內容</p>`;
             }
+
+            // 4. 空狀態提示
+            if (!hasAnyLink) {
+                htmlContent += `<p style="color: #8e8e93; font-size: 14px; text-align: center; margin: 10px 0;">此分類尚無內容</p>`;
+            }
+
+            htmlContent += `</div>`; // 結束 accordion-content
         });
 
-        // 5. 將最終結果印到畫面上
         appContent.innerHTML = htmlContent;
-
-        enableDragScroll(); // 啟動拖曳滑動功能
+        enableDragScroll(); // 確保重新綁定左滑刪除功能
 
     } catch (error) {
-        // 6. 錯誤捕捉 (如果真的又壞了，至少會在畫面上告訴你，而不是白畫面)
         console.error("載入失敗：", error);
-        appContent.innerHTML = '<p style="text-align: center; color: #FF3B30; margin-top: 50px;">連線異常，請打開 F12 檢查 Console 錯誤！</p>';
+        appContent.innerHTML = '<p style="text-align: center; color: #FF3B30;">連線異常，請檢查伺服器！</p>';
+    }
+}
+
+// 產生單一連結卡片的輔助函式 (包含左滑刪除架構)
+function generateLinkCard(link, subName) {
+    // 如果有傳入小分類名稱，就生出藍色小標籤
+    const tagHtml = subName ? `<div class="sub-tag">${subName}</div>` : '';
+
+    return `
+    <div class="swipe-container">
+        <div class="swipe-content link-card" style="margin-bottom: 0;">
+            <div class="card-info">
+                ${tagHtml}
+                <div class="card-title">${link.title}</div>
+                <div class="card-source">${link.source}</div>
+            </div>
+            <a href="${link.url}" target="_blank" style="text-decoration: none;">
+                <div class="card-image" style="display:flex; justify-content:center; align-items:center; background:#d1d1d6; color:#1c1c1e; font-size:12px; border-radius:8px; font-weight:bold;">前往</div>
+            </a>
+        </div>
+        <div class="swipe-actions">
+            <button onclick="deleteLink(${link.id})">刪除</button>
+        </div>
+    </div>`;
+}
+
+// 手風琴的開關邏輯 (含自動收合其他分類)
+function toggleAccordion(clickedHeader) {
+    const content = clickedHeader.nextElementSibling;
+    const arrow = clickedHeader.querySelector('.arrow-icon');
+
+    // 步驟 1：把其他打開的都關起來 (自動收合功能)
+    const allHeaders = document.querySelectorAll('.accordion-header');
+    allHeaders.forEach(header => {
+        if (header !== clickedHeader) {
+            header.nextElementSibling.style.display = 'none';
+            header.querySelector('.arrow-icon').style.transform = 'rotate(0deg)';
+        }
+    });
+
+    // 步驟 2：切換目前點擊的這個分類
+    if (content.style.display === 'block') {
+        content.style.display = 'none';
+        arrow.style.transform = 'rotate(0deg)';
+    } else {
+        content.style.display = 'block';
+        arrow.style.transform = 'rotate(180deg)';
     }
 }
 
@@ -217,38 +251,41 @@ document.addEventListener('DOMContentLoaded', fetchAndRenderApp);
 
 // ================= 新增連結功能 =================
 
-// 1. 打開視窗並向後端抓取分類資料
+// 打開視窗並建立「大分類 + 小分類」的複合式選單
 async function openAddModal() {
     document.getElementById('add-modal').style.display = 'flex';
-    const selectEl = document.getElementById('new-subcategory');
+    const selectEl = document.getElementById('new-subcategory'); // 沿用原本的 ID
     selectEl.innerHTML = '<option value="" disabled selected>載入分類中...</option>';
 
     try {
-        // 跟我們一開始寫的渲染邏輯一樣，去跟 Flask 拿分類清單
         const response = await fetch('http://127.0.0.1:5002/api/categories');
         const categoriesData = await response.json();
 
-        selectEl.innerHTML = '<option value="" disabled selected>請選擇要放入的分類</option>';
+        selectEl.innerHTML = '<option value="" disabled selected>請選擇存放位置</option>';
 
-        // 利用 optgroup 標籤，把小分類歸類在大分類底下
-        categoriesData.forEach(category => {
-            if (category.subcategories && category.subcategories.length > 0) {
-                const optGroup = document.createElement('optgroup');
-                optGroup.label = `📁 ${category.name}`;
+        categoriesData.forEach(cat => {
+            const optGroup = document.createElement('optgroup');
+            optGroup.label = `📁 ${cat.name}`;
 
-                category.subcategories.forEach(sub => {
-                    const option = document.createElement('option');
-                    option.value = sub.id; // 資料庫需要的是小分類的 ID
-                    option.textContent = sub.name;
-                    optGroup.appendChild(option);
+            // 選項 1：直接放入大分類 (Value 格式：cat_大分類ID)
+            const directOpt = document.createElement('option');
+            directOpt.value = `cat_${cat.id}`;
+            directOpt.textContent = `📥 直接放入「${cat.name}」`;
+            optGroup.appendChild(directOpt);
+
+            // 選項 2：放入底下的小分類 (Value 格式：sub_大分類ID_小分類ID)
+            if (cat.subcategories && cat.subcategories.length > 0) {
+                cat.subcategories.forEach(sub => {
+                    const subOpt = document.createElement('option');
+                    subOpt.value = `sub_${cat.id}_${sub.id}`;
+                    subOpt.textContent = `↳ ${sub.name}`;
+                    optGroup.appendChild(subOpt);
                 });
-
-                selectEl.appendChild(optGroup);
             }
+            selectEl.appendChild(optGroup);
         });
     } catch (error) {
-        console.error("載入分類失敗：", error);
-        selectEl.innerHTML = '<option value="" disabled>無法載入分類，請檢查連線</option>';
+        selectEl.innerHTML = '<option value="" disabled>載入失敗</option>';
     }
 }
 
@@ -260,17 +297,27 @@ function closeAddModal() {
 
 // 3. 處理表單送出
 async function submitNewLink(event) {
-    event.preventDefault(); // 阻擋 HTML 表單預設的重整網頁行為
+    event.preventDefault();
 
-    // 收集輸入框的值
     const title = document.getElementById('new-title').value;
     const url = document.getElementById('new-url').value;
     const source = document.getElementById('new-source').value || '未提供';
-    const subcategoryId = document.getElementById('new-subcategory').value;
+    const locationValue = document.getElementById('new-subcategory').value;
 
-    if (!subcategoryId) {
-        alert('請先選擇一個分類喔！');
-        return;
+    if (!locationValue) {
+        return alert('請選擇一個存放位置喔！');
+    }
+
+    // 🌟 核心：解析前端傳來的字串，決定 category_id 和 subcategory_id
+    let categoryId = null;
+    let subcategoryId = null;
+
+    if (locationValue.startsWith('cat_')) {
+        categoryId = parseInt(locationValue.split('_')[1]); // 只有大分類
+    } else if (locationValue.startsWith('sub_')) {
+        const parts = locationValue.split('_');
+        categoryId = parseInt(parts[1]);
+        subcategoryId = parseInt(parts[2]); // 包含大分類與小分類
     }
 
     try {
@@ -281,20 +328,18 @@ async function submitNewLink(event) {
                 title: title,
                 url: url,
                 source: source,
-                subcategory_id: parseInt(subcategoryId) // 轉成數字傳給後端
+                category_id: categoryId,
+                subcategory_id: subcategoryId
             })
         });
 
         if (response.ok) {
-            // 新增成功：關閉視窗並重新抓取一次最新資料來更新畫面
             closeAddModal();
-            fetchAndRenderApp();
+            fetchAndRenderApp(); // 自動刷新首頁
         } else {
-            const res = await response.json();
-            alert('新增失敗：' + (res.error || '未知錯誤'));
+            alert('新增失敗，請檢查網路連線。');
         }
     } catch (error) {
-        console.error("儲存失敗：", error);
         alert('連線錯誤，請確認 Flask 伺服器是否運作中。');
     }
 }

@@ -29,23 +29,26 @@ class Category(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), nullable=False)
     subcategories = db.relationship('Subcategory', backref='category', lazy=True, cascade="all, delete-orphan")
+    links = db.relationship('Link', backref='category', cascade='all, delete-orphan')
 
 class Subcategory(db.Model):
     __tablename__ = 'subcategories'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), nullable=False)
     category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=False)
-    links = db.relationship('Link', backref='subcategory', lazy=True, cascade="all, delete-orphan")
 
 class Link(db.Model):
     __tablename__ = 'links'
     id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(255), nullable=False)
-    url = db.Column(db.Text, nullable=False)
-    source = db.Column(db.String(50)) # 例如: threads.net, instagram.com
-    image_url = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    subcategory_id = db.Column(db.Integer, db.ForeignKey('subcategories.id'), nullable=False)
+    title = db.Column(db.String(100), nullable=False)
+    url = db.Column(db.String(500), nullable=False)
+    source = db.Column(db.String(50))
+    
+    # 必填：每個連結「一定」要屬於某個大分類
+    category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=False)
+    
+    # 選填 (nullable=True)：小分類變成可有可無的標籤
+    subcategory_id = db.Column(db.Integer, db.ForeignKey('subcategories.id'), nullable=True)
 
 # ================= API 路由設計 =================
 
@@ -102,57 +105,55 @@ def serve_static(filename):
         return send_file(filename)
     return {"error": "找不到檔案或沒有讀取權限"}, 404
 
-# 1. 取得所有分類與連結 (供前端網頁顯示)
+# 取得所有分類與連結 (升級版)
 @app.route('/api/categories', methods=['GET'])
 def get_categories():
     categories = Category.query.all()
     result = []
     for cat in categories:
+        # 1. 抓出「直接屬於大分類，且沒有小分類」的連結
+        direct_links = Link.query.filter_by(category_id=cat.id, subcategory_id=None).all()
+        
         cat_data = {
             "id": cat.id,
-            "categoryName": cat.name,
+            "name": cat.name,
+            # 把直接關聯的連結放進來
+            "links": [{"id": l.id, "title": l.title, "url": l.url, "source": l.source} for l in direct_links],
             "subcategories": []
         }
+        
+        # 2. 抓出屬於小分類的連結
         for sub in cat.subcategories:
-            sub_data = {
+            sub_links = Link.query.filter_by(subcategory_id=sub.id).all()
+            cat_data["subcategories"].append({
                 "id": sub.id,
                 "name": sub.name,
-                "links": []
-            }
-            for link in sub.links:
-                sub_data["links"].append({
-                    "id": link.id,
-                    "title": link.title,
-                    "url": link.url,
-                    "source": link.source,
-                    "imageUrl": link.image_url or "https://via.placeholder.com/48"
-                })
-            cat_data["subcategories"].append(sub_data)
+                "links": [{"id": l.id, "title": l.title, "url": l.url, "source": l.source} for l in sub_links]
+            })
+            
         result.append(cat_data)
-    
+        
     return jsonify(result), 200
 
-# 新增連結 (供 iOS 捷徑打 API 存入)
+# 新增連結 API (升級版)
 @app.route('/api/links', methods=['POST'])
 def add_link():
-    data = request.get_json()
-    
-    # 基礎驗證
-    if not data or not 'url' in data or not 'subcategory_id' in data:
-        return jsonify({"error": "Missing required fields"}), 400
-
+    data = request.json
+    # 現在 category_id 是必填了
+    if not data or not data.get('url') or not data.get('category_id'):
+        return {"error": "缺少必要欄位 (需包含 url 與 category_id)"}, 400
+        
     new_link = Link(
-        title=data.get('title', '未命名連結'),
+        title=data.get('title', '無標題'),
         url=data['url'],
-        source=data.get('source', 'Unknown'),
-        image_url=data.get('image_url', ''),
-        subcategory_id=data['subcategory_id']
+        source=data.get('source', '未提供'),
+        category_id=data['category_id'],
+        # 如果前端沒有傳小分類，這裡就會是 None，完美符合我們的設計
+        subcategory_id=data.get('subcategory_id') 
     )
-    
     db.session.add(new_link)
     db.session.commit()
-    
-    return jsonify({"message": "Link added successfully", "id": new_link.id}), 201
+    return {"message": "連結新增成功！"}, 201
 
 # 刪除連結
 @app.route('/api/links/<int:link_id>', methods=['DELETE'])
@@ -228,30 +229,29 @@ def rename_category():
 
     return {"message": "名稱更新成功"}, 200
 
-    # 移除分類或子分類（連帶刪除底下的子分類或連結）
+# 刪除分類 API (升級刪除邏輯)
 @app.route('/api/delete_category', methods=['DELETE'])
-def delete_category():
+def delete_any_category():
     data = request.json
-    item_type = data.get('type') # 'category' 或 'subcategory'
+    item_type = data.get('type') 
     item_id = data.get('id')
-
-    if not all([item_type, item_id]):
-        return {"error": "缺少必要欄位"}, 400
-
+    
     if item_type == 'category':
         item = Category.query.get(item_id)
-    elif item_type == 'subcategory':
-        item = Subcategory.query.get(item_id)
     else:
-        return {"error": "無效的項目類型"}, 400
-
+        item = Subcategory.query.get(item_id)
+        # 關鍵溫柔設計：刪除小分類時，把它底下的連結「釋放」回大分類
+        if item:
+            links_to_keep = Link.query.filter_by(subcategory_id=item.id).all()
+            for link in links_to_keep:
+                link.subcategory_id = None # 拔掉小分類標籤
+    
     if not item:
-        return {"error": "找不到該項目"}, 404
-
+        return {"error": "找不到該分類"}, 404
+        
     db.session.delete(item)
     db.session.commit()
-
-    return {"message": "刪除成功"}, 200
+    return {"message": "處理成功！"}
 
 # 初始化資料庫 (僅第一次執行時需要)
 @app.route("/api/init-db", methods=['GET'])
