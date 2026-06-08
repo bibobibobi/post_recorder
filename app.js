@@ -16,6 +16,8 @@ function toggleAuthMode() {
 
     // 清空錯誤訊息
     messageEl.textContent = '';
+    document.getElementById('password-input').value = '';
+    inviteInput.value = '';
 
     if (isLoginMode) {
         // 切換回登入畫面
@@ -97,7 +99,13 @@ function handleLogout() {
     // 清空輸入框
     document.getElementById('username-input').value = '';
     document.getElementById('password-input').value = '';
+    document.getElementById('invite-code-input').value = '';
     document.getElementById('login-message').textContent = '';
+    document.getElementById('app-content').innerHTML = '';
+
+    if (!isLoginMode) {
+        toggleAuthMode(); // 如果當前在註冊模式，登出時自動切回登入模式
+    }
 }
 
 // 3. 控制畫面切換，並啟動抓取資料
@@ -239,7 +247,7 @@ function generateLinkCard(link, subName, subId) {
             </a>
         </div>
         <div class="swipe-actions">
-            <button onclick="deleteLink(${link.id})">刪除</button>
+            <button onclick="deleteLink(${link.id}, this)">刪除</button>
         </div>
     </div>`;
 }
@@ -295,8 +303,6 @@ function toggleAccordion(clickedHeader) {
     }
 }
 
-// 網頁載入完成後，自動執行抓取與渲染函式
-document.addEventListener('DOMContentLoaded', fetchAndRenderApp);
 
 // ================= 新增連結功能 (連動選單升級版) =================
 
@@ -473,7 +479,8 @@ async function submitNewLink(event) {
 }
 
 // ================= 刪除連結功能 =================
-async function deleteLink(linkId) {
+// 🌟 接收按鈕元素，用動畫方式移除，不再重整頁面
+async function deleteLink(linkId, btnElement) {
     // 加入原生確認視窗，避免誤觸
     if (!confirm("確定要刪除這個收藏嗎？")) return;
 
@@ -483,8 +490,18 @@ async function deleteLink(linkId) {
         });
 
         if (response.ok) {
-            // 刪除成功後，自動重新抓取資料，畫面就會瞬間更新
-            fetchAndRenderApp();
+            // 找到該按鈕所在的整張卡片外層容器
+            const card = btnElement.closest('.swipe-container');
+
+            // 加上過場動畫，平滑縮小、淡出
+            card.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+            card.style.opacity = '0';
+            card.style.transform = 'translateX(-30px)';
+
+            // 等待動畫跑完後再從 DOM 中移除
+            setTimeout(() => {
+                card.remove();
+            }, 300);
         } else {
             const res = await response.json();
             alert("刪除失敗：" + (res.error || "未知錯誤"));
