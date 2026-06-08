@@ -1,3 +1,23 @@
+// ================= 全域 API 攔截器 (自動夾帶通行證) =================
+const originalFetch = window.fetch;
+window.fetch = async function (resource, config) {
+    // 1. 如果是登入或註冊 API，不需要通行證，直接放行
+    if (typeof resource === 'string' && (resource.includes('/api/login') || resource.includes('/api/register'))) {
+        return originalFetch(resource, config);
+    }
+
+    // 2. 其他所有的 API 請求，都在背景偷偷塞入 X-Username 標頭
+    if (!config) config = {};
+    if (!config.headers) config.headers = {};
+
+    const username = localStorage.getItem('saved_username');
+    if (username) {
+        config.headers['X-Username'] = username;
+    }
+
+    return originalFetch(resource, config);
+};
+
 // ================= 登入與畫面切換邏輯 =================
 
 // 1. 處理登入請求

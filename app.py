@@ -6,13 +6,14 @@ from flask_cors import CORS
 from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 
-load_dotenv() # 載入 .env 檔案中的環境變數
+load_dotenv()
 
 app = Flask(__name__)
-CORS(app) # 允許前端跨來源請求
+CORS(app)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.json.ensure_ascii = False
 
 db = SQLAlchemy(app)
 
@@ -23,11 +24,13 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
+    categories = db.relationship('Category', backref='owner', cascade='all, delete-orphan')
 
 class Category(db.Model):
     __tablename__ = 'categories'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     subcategories = db.relationship('Subcategory', backref='category', lazy=True, cascade="all, delete-orphan")
     links = db.relationship('Link', backref='category', cascade='all, delete-orphan')
 
@@ -43,12 +46,16 @@ class Link(db.Model):
     title = db.Column(db.String(100), nullable=False)
     url = db.Column(db.String(500), nullable=False)
     source = db.Column(db.String(50))
-    
-    # 必填：每個連結「一定」要屬於某個大分類
     category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=False)
-    
-    # 選填 (nullable=True)：小分類變成可有可無的標籤
     subcategory_id = db.Column(db.Integer, db.ForeignKey('subcategories.id'), nullable=True)
+
+# ================= 輔助函式：身份驗證 =================
+
+def get_current_user():
+    username = request.headers.get('X-Username')
+    if not username:
+        return None
+    return User.query.filter_by(username=username).first()
 
 # ================= API 路由設計 =================
 
@@ -58,15 +65,12 @@ class Link(db.Model):
 def register():
     data = request.json
     
-    # 1. 檢查通關密語 (防護機制)
     if data.get('invite_code') != os.getenv('INVITE_CODE'):
         return {"error": "註冊碼錯誤，拒絕註冊！"}, 403
 
-    # 2. 檢查帳號是否已經存在
     if User.query.filter_by(username=data.get('username')).first():
         return {"error": "這個帳號已經被註冊過囉！"}, 400
 
-    # 3. 密碼加密並存入資料庫
     hashed_password = generate_password_hash(data.get('password'))
     new_user = User(username=data.get('username'), password_hash=hashed_password)
     
@@ -79,11 +83,8 @@ def register():
 @app.route('/api/login', methods=['POST'])
 def login():
     data = request.json
-    
-    # 1. 去資料庫尋找這個帳號
     user = User.query.filter_by(username=data.get('username')).first()
 
-    # 2. 驗證帳號存在，且密碼的 Hash 吻合
     if user and check_password_hash(user.password_hash, data.get('password')):
         return {
             "message": "登入成功！", 
@@ -98,31 +99,32 @@ def home():
 
 @app.route('/<path:filename>')
 def serve_static(filename):
-    # 允許 Flask 順便提供同資料夾下的 css 和 js 檔案給網頁使用
-    # ⚠️ 安全白名單：我們只允許讀取特定檔案，防止駭客讀取到你的 .env 密碼檔！
     allowed_files = ['style.css', 'app.js', 'manifest.json', 'icon-192.png']
     if filename in allowed_files:
         return send_file(filename)
     return {"error": "找不到檔案或沒有讀取權限"}, 404
 
-# 取得所有分類與連結 (升級版)
+
+# 取得所有分類與連結 (加入使用者過濾)
 @app.route('/api/categories', methods=['GET'])
 def get_categories():
-    categories = Category.query.all()
+    user = get_current_user()
+    if not user:
+        return {"error": "未登入或授權失敗"}, 401
+
+    categories = Category.query.filter_by(user_id=user.id).all()
     result = []
+    
     for cat in categories:
-        # 1. 抓出「直接屬於大分類，且沒有小分類」的連結
         direct_links = Link.query.filter_by(category_id=cat.id, subcategory_id=None).all()
         
         cat_data = {
             "id": cat.id,
             "name": cat.name,
-            # 把直接關聯的連結放進來
             "links": [{"id": l.id, "title": l.title, "url": l.url, "source": l.source} for l in direct_links],
             "subcategories": []
         }
         
-        # 2. 抓出屬於小分類的連結
         for sub in cat.subcategories:
             sub_links = Link.query.filter_by(subcategory_id=sub.id).all()
             cat_data["subcategories"].append({
@@ -135,67 +137,89 @@ def get_categories():
         
     return jsonify(result), 200
 
-# 新增連結 API (升級版)
+
+# 新增連結 API
 @app.route('/api/links', methods=['POST'])
 def add_link():
+    user = get_current_user()
+    if not user:
+        return {"error": "未登入"}, 401
+
     data = request.json
-    # 現在 category_id 是必填了
     if not data or not data.get('url') or not data.get('category_id'):
         return {"error": "缺少必要欄位 (需包含 url 與 category_id)"}, 400
         
+    category = Category.query.filter_by(id=data['category_id'], user_id=user.id).first()
+    if not category:
+        return {"error": "找不到大分類或權限不足"}, 403
+
     new_link = Link(
         title=data.get('title', '無標題'),
         url=data['url'],
         source=data.get('source', '未提供'),
         category_id=data['category_id'],
-        # 如果前端沒有傳小分類，這裡就會是 None，完美符合我們的設計
         subcategory_id=data.get('subcategory_id') 
     )
     db.session.add(new_link)
     db.session.commit()
     return {"message": "連結新增成功！"}, 201
 
+
 # 刪除連結
 @app.route('/api/links/<int:link_id>', methods=['DELETE'])
 def delete_link(link_id):
-    # 利用傳入的 link_id 去資料庫尋找該筆資料 (假設你的資料表類別叫做 Link)
+    user = get_current_user()
+    if not user:
+        return {"error": "未登入"}, 401
+
     link_to_delete = Link.query.get(link_id)
     
-    if not link_to_delete:
-        return {"error": "找不到該連結"}, 404
+    if not link_to_delete or link_to_delete.category.user_id != user.id:
+        return {"error": "找不到該連結或權限不足"}, 404
         
     try:
         db.session.delete(link_to_delete)
         db.session.commit()
         return {"message": "刪除成功！"}, 200
     except Exception as e:
-        db.session.rollback() # 發生錯誤時退回，保護資料庫
+        db.session.rollback()
         return {"error": str(e)}, 500
 
+
 # 分類管理系統
-    #新增大分類
+
+# 新增大分類
 @app.route('/api/categories', methods=['POST'])
 def create_category():
+    user = get_current_user()
+    if not user:
+        return {"error": "未登入"}, 401
+
     data = request.json
     if not data or not data.get('name'):
         return {"error": "缺少分類名稱"}, 400
     
-    new_cat = Category(name=data['name'])
+    new_cat = Category(name=data['name'], user_id=user.id)
     db.session.add(new_cat)
     db.session.commit()
     
     return {"message": "分類建立成功", "id": new_cat.id}, 201
 
-    #新增子分類
+
+# 新增子分類
 @app.route('/api/categories/<int:category_id>/subcategories', methods=['POST'])
 def create_subcategory(category_id):
+    user = get_current_user()
+    if not user:
+        return {"error": "未登入"}, 401
+
     data = request.json
     if not data or not data.get('name'):
         return {"error": "缺少子分類名稱"}, 400
 
-    category = Category.query.get(category_id)
+    category = Category.query.filter_by(id=category_id, user_id=user.id).first()
     if not category:
-        return {"error": "找不到該分類"}, 404
+        return {"error": "找不到該分類或權限不足"}, 404
 
     new_subcat = Subcategory(name=data['name'], category_id=category_id)
     db.session.add(new_subcat)
@@ -203,11 +227,16 @@ def create_subcategory(category_id):
 
     return {"message": "子分類建立成功", "id": new_subcat.id}, 201
 
-    # 更新分類名稱
+
+# 更新分類名稱
 @app.route('/api/rename', methods=['PUT'])
 def rename_category():
+    user = get_current_user()
+    if not user:
+        return {"error": "未登入"}, 401
+
     data = request.json
-    item_type = data.get('type') # 'category' 或 'subcategory'
+    item_type = data.get('type')
     item_id = data.get('id')
     new_name = data.get('new_name')
 
@@ -215,9 +244,11 @@ def rename_category():
         return {"error": "缺少必要欄位"}, 400
 
     if item_type == 'category':
-        item = Category.query.get(item_id)
+        item = Category.query.filter_by(id=item_id, user_id=user.id).first()
     elif item_type == 'subcategory':
         item = Subcategory.query.get(item_id)
+        if item and item.category.user_id != user.id:
+            return {"error": "權限不足"}, 403
     else:
         return {"error": "無效的項目類型"}, 400
 
@@ -229,36 +260,44 @@ def rename_category():
 
     return {"message": "名稱更新成功"}, 200
 
-# 刪除分類 API (升級刪除邏輯)
+
+# 刪除分類
 @app.route('/api/delete_category', methods=['DELETE'])
 def delete_any_category():
+    user = get_current_user()
+    if not user:
+        return {"error": "未登入"}, 401
+
     data = request.json
     item_type = data.get('type') 
     item_id = data.get('id')
     
     if item_type == 'category':
-        item = Category.query.get(item_id)
+        item = Category.query.filter_by(id=item_id, user_id=user.id).first()
     else:
         item = Subcategory.query.get(item_id)
-        # 關鍵溫柔設計：刪除小分類時，把它底下的連結「釋放」回大分類
+        if item and item.category.user_id != user.id:
+            return {"error": "權限不足"}, 403
+            
         if item:
             links_to_keep = Link.query.filter_by(subcategory_id=item.id).all()
             for link in links_to_keep:
-                link.subcategory_id = None # 拔掉小分類標籤
+                link.subcategory_id = None 
     
     if not item:
-        return {"error": "找不到該分類"}, 404
+        return {"error": "找不到該分類或權限不足"}, 404
         
     db.session.delete(item)
     db.session.commit()
     return {"message": "處理成功！"}
 
+
 # 初始化資料庫 (僅第一次執行時需要)
 @app.route("/api/init-db", methods=['GET'])
 def init_db():
     db.create_all()
-
     return {"message": "Database initialized successfully"}, 200
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5002)
