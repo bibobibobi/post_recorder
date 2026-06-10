@@ -316,6 +316,8 @@ function toggleAccordion(clickedHeader) {
     const content = clickedHeader.nextElementSibling;
     const arrow = clickedHeader.querySelector('.arrow-icon');
 
+    resetAllSwipes(); // 每次點擊手風琴都先重置所有卡片的滑動狀態，避免被卡住
+
     // 步驟 1：把其他打開的都關起來 (自動收合功能)
     const allHeaders = document.querySelectorAll('.accordion-header');
     allHeaders.forEach(header => {
@@ -682,6 +684,24 @@ function enableDragScroll() {
             slider.style.scrollSnapType = 'x mandatory';
         }, 300);
     }
+}
+
+// 🌟 新增：重置所有卡片滑動狀態的專屬小幫手
+function resetAllSwipes() {
+    const sliders = document.querySelectorAll('.swipe-container');
+    sliders.forEach(slider => {
+        // 如果卡片是被打開的狀態
+        if (slider.scrollLeft > 0) {
+            // 暫時關閉平滑動畫，讓它「瞬間」縮回去，這樣切換回來才不會看到縮回去的殘影
+            slider.style.scrollBehavior = 'auto';
+            slider.scrollLeft = 0;
+
+            // 縮回去之後，再把平滑滾動的設定加回來
+            setTimeout(() => {
+                slider.style.scrollBehavior = 'smooth';
+            }, 50);
+        }
+    });
 }
 
 // ================= 分類管理系統 =================
