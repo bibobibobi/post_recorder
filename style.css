@@ -382,6 +382,7 @@ body {
     box-sizing: border-box;
     margin: 0 !important;
     border-radius: 16px 0 0 16px !important;
+    -webkit-user-drag: none;
 }
 
 /* 🎯 狙擊右側外框 */

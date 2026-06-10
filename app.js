@@ -602,6 +602,7 @@ function enableDragScroll() {
         let isDown = false;
         let startX;
         let scrollLeft;
+        let isDragging = false; // 新增：用來區分「點擊」和「拖曳」
 
         const closeOtherSliders = () => {
             sliders.forEach(other => {
@@ -621,6 +622,7 @@ function enableDragScroll() {
         slider.addEventListener('mousedown', (e) => {
             closeOtherSliders(); // 開始拖曳前先關掉其他可能打開的滑動選單
             isDown = true;
+            isDragging = false; // 每次按下都重置為非拖曳狀態
             slider.style.scrollSnapType = 'none'; // 拖曳時暫時關閉 scroll-snap，手感更跟手
             slider.style.scrollBehavior = 'auto'; // 拖曳時暫時關閉平滑滾動，手感更跟手
             startX = e.pageX - slider.offsetLeft;
@@ -646,8 +648,21 @@ function enableDragScroll() {
             e.preventDefault(); // 阻止預設的文字選取行為
             const x = e.pageX - slider.offsetLeft;
             const walk = (x - startX);
+            if (Math.abs(walk) > 5) { // 如果移動超過 5px，就認定為拖曳行為
+                isDragging = true;
+            }
             slider.scrollLeft = scrollLeft - walk;
         });
+
+        const link = slider.querySelector('a.swipe-content');
+        if (link) {
+            link.addEventListener('click', (e) => {
+                // 如果剛剛發生過拖曳，阻斷超連結跳轉，避免誤觸
+                if (isDragging) {
+                    e.preventDefault();
+                }
+            });
+        }
     });
 
     // 負責處理「放開滑鼠後」的動畫邏輯
