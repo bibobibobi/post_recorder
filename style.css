@@ -355,73 +355,61 @@ body {
 }
 
 /* =========================================
-   8. 左滑刪除特效 (Swipe to Delete)
+   8. 左滑刪除特效 (終極精準打擊版)
    ========================================= */
 .swipe-container {
     display: flex;
     overflow-x: auto;
-    /* 允許橫向滑動 */
     scroll-snap-type: x mandatory;
-    /* 讓滑動有「吸附感」的黑科技 */
     scroll-behavior: smooth;
     -ms-overflow-style: none;
-    /* 隱藏 IE/Edge 捲軸 */
     scrollbar-width: none;
-    /* 隱藏 Firefox 捲軸 */
-    margin-bottom: 12px;
     border-radius: 16px;
+    margin-bottom: 12px;
     background-color: transparent;
-
-    user-select: none;
-    -webkit-user-select: none;
-    /* 防止滑動時文字被選取 */
-
-    cursor: grab;
+    gap: 0 !important;
+    /* 確保中間無縫隙 */
 }
 
-.swipe-container:active {
-    cursor: grabbing;
-}
-
-/* 隱藏 Chrome/Safari 橫向捲軸，讓它看起來不像網頁 */
 .swipe-container::-webkit-scrollbar {
     display: none;
 }
 
-.swipe-content {
+/* 🎯 狙擊左側卡片 */
+.swipe-container a.swipe-content.link-card {
     flex: 0 0 100%;
-    /* 卡片主體佔滿 100% 寬度 */
     scroll-snap-align: start;
-    /* 吸附在左側 */
+    box-sizing: border-box;
+    margin: 0 !important;
+    border-radius: 16px 0 0 16px !important;
 }
 
-.swipe-actions {
+/* 🎯 狙擊右側外框 */
+.swipe-container .swipe-actions {
     flex: 0 0 80px;
     scroll-snap-align: end;
     display: flex;
-    justify-content: center;
     align-items: stretch;
-
-    background-color: #FF3B30;
-    border-radius: 16px 16px 16px 16px;
+    margin: 0 !important;
+    padding: 0 !important;
 }
 
-.swipe-actions button {
-    background-color: transparent;
+/* 🎯 狙擊右側按鈕 */
+.swipe-container .swipe-actions button {
+    background-color: #FF3B30;
     color: white;
     border: none;
     width: 100%;
     font-size: 16px;
     font-weight: bold;
     cursor: pointer;
-    border-radius: 0 16px 16px 0;
-    /* 右側圓角 */
+    margin: 0 !important;
+    border-radius: 0 16px 16px 0 !important;
     transition: opacity 0.2s;
 }
 
-.swipe-actions button:active {
+.swipe-container .swipe-actions button:active {
     opacity: 0.7;
-    /* 點擊回饋 */
 }
 
 /* =========================================
@@ -555,16 +543,20 @@ body {
     overflow-x: auto;
     gap: 8px;
     padding: 4px 16px 16px 16px;
-    scrollbar-width: none; /* 隱藏 Firefox 捲軸 */
-    -ms-overflow-style: none; /* 隱藏 IE 捲軸 */
+    scrollbar-width: none;
+    /* 隱藏 Firefox 捲軸 */
+    -ms-overflow-style: none;
+    /* 隱藏 IE 捲軸 */
 }
 
 .filter-chips-container::-webkit-scrollbar {
-    display: none; /* 隱藏 Chrome/Safari 捲軸 */
+    display: none;
+    /* 隱藏 Chrome/Safari 捲軸 */
 }
 
 .filter-chip {
-    white-space: nowrap; /* 文字不換行 */
+    white-space: nowrap;
+    /* 文字不換行 */
     padding: 6px 14px;
     background-color: #f2f2f7;
     color: #8e8e93;
@@ -583,5 +575,74 @@ body {
 
 /* 包裝卡片的容器，用來做篩選動畫過渡 */
 .category-cards-wrapper {
-    padding: 0 16px; /* 將卡片的左右間距移到這裡統一管理 */
+    padding: 0 16px;
+    /* 將卡片的左右間距移到這裡統一管理 */
+}
+
+/* ================= iOS 備忘錄風格卡片 ================= */
+
+/* 卡片主體排版 */
+.memo-style-card {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    text-decoration: none;
+    /* 移除超連結底線 */
+    padding: 12px 16px;
+    background-color: #e5e5ea;
+    /* 備忘錄經典淺灰色底 */
+    border-radius: 12px;
+    color: #1c1c1e;
+}
+
+/* 左側文字區塊：自動佔滿剩餘空間 */
+.card-text-area {
+    flex: 1;
+    overflow: hidden;
+    padding-right: 12px;
+    /* 與右邊圖片保持距離 */
+}
+
+/* 標題：粗體黑字、超出範圍變點點點 */
+.card-text-area .card-title {
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 來源：灰色小字 */
+.card-text-area .card-source {
+    font-size: 13px;
+    color: #8e8e93;
+}
+
+/* 右側縮圖區塊 */
+.card-image-area {
+    flex-shrink: 0;
+    /* 防止圖片被擠壓 */
+}
+
+/* 圖片樣式：正方形、圓角、裁切適應 */
+.card-thumbnail {
+    width: 60px;
+    height: 60px;
+    border-radius: 8px;
+    object-fit: cover;
+    /* 讓長方形圖片完美裁切成正方形 */
+    display: block;
+    background-color: #ffffff;
+}
+
+/* 預設圖示 (抓不到圖片時使用) */
+.fallback-thumbnail {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #d1d1d6;
+    color: #8e8e93;
+    font-size: 24px;
 }

@@ -1,4 +1,6 @@
 import os
+import requests
+from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify, send_file
 from flask_sqlalchemy import SQLAlchemy
@@ -46,6 +48,7 @@ class Link(db.Model):
     title = db.Column(db.String(100), nullable=False)
     url = db.Column(db.String(500), nullable=False)
     source = db.Column(db.String(50))
+    image_url = db.Column(db.String(500), nullable=True) # 🌟 儲存預覽圖片的網址
     category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=False)
     subcategory_id = db.Column(db.Integer, db.ForeignKey('subcategories.id'), nullable=True)
 
@@ -105,7 +108,49 @@ def serve_static(filename):
     return {"error": "找不到檔案或沒有讀取權限"}, 404
 
 
-# 取得所有分類與連結 (加入使用者過濾)
+# ================= 網頁預覽抓取 API (爬蟲核心) =================
+@app.route('/api/fetch-preview', methods=['POST'])
+def fetch_preview():
+    user = get_current_user()
+    if not user:
+        return {"error": "未登入"}, 401
+
+    data = request.json
+    target_url = data.get('url')
+    if not target_url:
+        return {"error": "缺少網址"}, 400
+
+    try:
+        # 1. 偽裝成正常瀏覽器發送請求
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+        response = requests.get(target_url, headers=headers, timeout=5)
+        response.encoding = 'utf-8' # 確保中文不變亂碼
+        
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # 2. 尋找圖片 (優先找 og:image)
+        image = ""
+        og_image = soup.find("meta", property="og:image")
+        if og_image and og_image.get("content"):
+            image = og_image["content"]
+            
+        # 3. 尋找標題 (優先找 og:title，沒有再找 <title>)
+        title = ""
+        og_title = soup.find("meta", property="og:title")
+        if og_title and og_title.get("content"):
+            title = og_title["content"]
+        elif soup.title and soup.title.string:
+            title = soup.title.string.strip()
+            
+        return {"title": title, "image": image}, 200
+
+    except Exception as e:
+        print(f"抓取預覽失敗: {e}")
+        # 如果抓取失敗 (例如網站阻擋爬蟲)，回傳空字串，讓使用者自己手填
+        return {"title": "", "image": ""}, 200
+
+
+# 取得所有分類與連結 (加入使用者過濾與圖片網址回傳)
 @app.route('/api/categories', methods=['GET'])
 def get_categories():
     user = get_current_user()
@@ -121,7 +166,8 @@ def get_categories():
         cat_data = {
             "id": cat.id,
             "name": cat.name,
-            "links": [{"id": l.id, "title": l.title, "url": l.url, "source": l.source} for l in direct_links],
+            # 🌟 補上 "image_url": l.image_url
+            "links": [{"id": l.id, "title": l.title, "url": l.url, "source": l.source, "image_url": l.image_url} for l in direct_links],
             "subcategories": []
         }
         
@@ -130,7 +176,8 @@ def get_categories():
             cat_data["subcategories"].append({
                 "id": sub.id,
                 "name": sub.name,
-                "links": [{"id": l.id, "title": l.title, "url": l.url, "source": l.source} for l in sub_links]
+                # 🌟 補上 "image_url": l.image_url
+                "links": [{"id": l.id, "title": l.title, "url": l.url, "source": l.source, "image_url": l.image_url} for l in sub_links]
             })
             
         result.append(cat_data)
@@ -157,6 +204,7 @@ def add_link():
         title=data.get('title', '無標題'),
         url=data['url'],
         source=data.get('source', '未提供'),
+        image_url=data.get('image_url', ''), # 🌟 儲存從前端傳來的圖片網址
         category_id=data['category_id'],
         subcategory_id=data.get('subcategory_id') 
     )

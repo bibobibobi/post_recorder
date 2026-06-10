@@ -249,23 +249,35 @@ async function fetchAndRenderApp() {
     }
 }
 
-// 產生單一連結卡片的輔助函式 (包含左滑刪除架構與 data-sub-id)
+// 產生單一連結卡片的輔助函式 (iOS 備忘錄風格)
 function generateLinkCard(link, subName, subId) {
-    // 如果有傳入小分類名稱，就生出藍色小標籤
-    const tagHtml = subName ? `<div class="sub-tag">${subName}</div>` : '';
+    // 判斷是否有抓到圖片，若無則顯示預設的灰色方塊
+    let imageHtml = '';
+    if (link.image_url) {
+        imageHtml = `<img src="${link.image_url}" alt="preview" class="card-thumbnail">`;
+    } else {
+        // 沒有圖片時的預設圖示 (顯示一個灰底加上連結符號)
+        imageHtml = `<div class="card-thumbnail fallback-thumbnail">🔗</div>`;
+    }
 
     return `
     <div class="swipe-container filterable-card" data-sub-id="${subId}">
-        <div class="swipe-content link-card" style="margin-bottom: 0;">
-            <div class="card-info">
-                ${tagHtml}
+        <!-- 把整張卡片變成一個超連結 <a> 標籤 -->
+        <a href="${link.url}" target="_blank" class="swipe-content link-card memo-style-card">
+            
+            <!-- 左側：文字區塊 -->
+            <div class="card-text-area">
                 <div class="card-title">${link.title}</div>
                 <div class="card-source">${link.source}</div>
             </div>
-            <a href="${link.url}" target="_blank" style="text-decoration: none;">
-                <div class="card-image" style="display:flex; justify-content:center; align-items:center; background:#d1d1d6; color:#1c1c1e; font-size:12px; border-radius:8px; font-weight:bold;">前往</div>
-            </a>
-        </div>
+            
+            <!-- 右側：縮圖區塊 -->
+            <div class="card-image-area">
+                ${imageHtml}
+            </div>
+            
+        </a>
+        
         <div class="swipe-actions">
             <button onclick="deleteLink(${link.id}, this)">刪除</button>
         </div>
@@ -324,15 +336,64 @@ function toggleAccordion(clickedHeader) {
 }
 
 
-// ================= 新增連結功能 (連動選單升級版) =================
+// ================= 新增連結功能 (自動解析版) =================
 
 // 用來暫存從後端抓回來的大分類資料，避免一直重複發送請求
 let cachedCategoriesData = [];
+// 🌟 新增：用來暫存剛抓到的預覽圖片網址
+let currentPreviewImage = '';
+
+// 🌟 核心魔法：自動抓取網址預覽
+async function fetchUrlPreview() {
+    const urlInput = document.getElementById('new-url').value;
+    const titleInput = document.getElementById('new-title');
+
+    // 如果沒有輸入內容，或是開頭不是 http，就不浪費時間解析
+    if (!urlInput || !urlInput.startsWith('http')) return;
+
+    // 提示使用者正在處理中，營造流暢感
+    const originalPlaceholder = titleInput.placeholder;
+    titleInput.placeholder = "🔄 正在自動解析網址...";
+
+    try {
+        // 呼叫我們剛寫好的爬蟲 API
+        const response = await fetch('http://127.0.0.1:5002/api/fetch-preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: urlInput })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+
+            // 溫柔設計：只有在使用者「還沒手動打標題」的時候，才幫他自動填寫
+            if (data.title && !titleInput.value) {
+                titleInput.value = data.title;
+            }
+
+            // 將圖片網址偷偷存在背景，等等按「新增」時一起打包送給資料庫
+            currentPreviewImage = data.image || '';
+        }
+    } catch (error) {
+        console.error("解析失敗：", error);
+    } finally {
+        titleInput.placeholder = originalPlaceholder; // 恢復原本的 placeholder
+    }
+}
+
+// 🌟 綁定事件：當網頁載入完成後，讓網址輸入框擁有「失去焦點即解析」的能力
+document.addEventListener('DOMContentLoaded', () => {
+    const urlField = document.getElementById('new-url');
+    if (urlField) {
+        urlField.addEventListener('blur', fetchUrlPreview);
+    }
+});
 
 // 1. 打開視窗並重置選單
 async function openAddModal() {
     document.getElementById('add-modal').style.display = 'flex';
-    document.getElementById('add-link-form').reset(); // 清空之前的輸入
+    document.getElementById('add-link-form').reset();
+    currentPreviewImage = ''; // 🌟 每次打開都要清空上一次的圖片紀錄
     await refreshCategorySelects();
 }
 
@@ -482,6 +543,7 @@ async function submitNewLink(event) {
                 title: title,
                 url: url,
                 source: source,
+                image_url: currentPreviewImage, // 🌟 關鍵發送：把剛才存起來的圖片網址一起送出去
                 category_id: categoryId,
                 subcategory_id: subcategoryId
             })
@@ -541,13 +603,33 @@ function enableDragScroll() {
         let startX;
         let scrollLeft;
 
+        const closeOtherSliders = () => {
+            sliders.forEach(other => {
+                // 如果是別人，而且它的 scrollLeft 大於 0 (代表被拉開了)
+                if (other !== slider && other.scrollLeft > 0) {
+                    other.style.scrollBehavior = 'smooth'; // 開啟平滑動畫
+                    other.scrollLeft = 0; // 強制縮回去
+
+                    // 等待 300 毫秒動畫跑完，再把原生的吸附功能加回來
+                    setTimeout(() => {
+                        other.style.scrollSnapType = 'x mandatory';
+                    }, 300);
+                }
+            });
+        };
+
         slider.addEventListener('mousedown', (e) => {
+            closeOtherSliders(); // 開始拖曳前先關掉其他可能打開的滑動選單
             isDown = true;
             slider.style.scrollSnapType = 'none'; // 拖曳時暫時關閉 scroll-snap，手感更跟手
             slider.style.scrollBehavior = 'auto'; // 拖曳時暫時關閉平滑滾動，手感更跟手
             startX = e.pageX - slider.offsetLeft;
             scrollLeft = slider.scrollLeft;
         });
+
+        slider.addEventListener('touchstart', () => {
+            closeOtherSliders();
+        }, { passive: true });
 
         slider.addEventListener('mouseleave', () => {
             if (isDown) smoothSnap(slider); // 如果滑鼠離開容器，且正在拖曳，則啟動平滑吸附
