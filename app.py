@@ -1,5 +1,6 @@
 import os
 import requests
+import uuid
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify, send_file
@@ -19,20 +20,48 @@ app.json.ensure_ascii = False
 
 db = SQLAlchemy(app)
 
-# ================= 資料庫模型設計 =================
+# ================= 資料庫模型設計 (群組協作版) =================
 
 class User(db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
-    categories = db.relationship('Category', backref='owner', cascade='all, delete-orphan')
+    
+    # 🌟 修改：User 不再直接擁有 Category，而是擁有「加入的群組關係」
+    groups = db.relationship('UserGroup', backref='user', cascade='all, delete-orphan')
+
+# 🌟 新增：群組 (Workspace) 表
+class Group(db.Model):
+    __tablename__ = 'groups'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    is_personal = db.Column(db.Boolean, default=True, nullable=False) # 判斷是否為私人預設空間
+    invite_token = db.Column(db.String(100), unique=True, nullable=True) # 用於邀請連結的唯一識別碼
+    # 群組底下的成員關係
+    members = db.relationship('UserGroup', backref='group', cascade='all, delete-orphan')
+    # 群組擁有的分類
+    categories = db.relationship('Category', backref='group', cascade='all, delete-orphan')
+
+# 🌟 新增：使用者與群組的中介表 (負責記錄誰在哪個群組，以及他的權限)
+class UserGroup(db.Model):
+    __tablename__ = 'user_groups'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    group_id = db.Column(db.Integer, db.ForeignKey('groups.id'), nullable=False)
+    role = db.Column(db.String(20), nullable=False, default='member') # 例如：'owner' (管理員), 'member' (一般成員)
+
+    # 確保同一個使用者不會在同一個群組被重複加入
+    __table_args__ = (db.UniqueConstraint('user_id', 'group_id', name='_user_group_uc'),)
 
 class Category(db.Model):
     __tablename__ = 'categories'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    
+    # 🌟 修改核心：分類不再綁定 user_id，而是綁定 group_id！
+    group_id = db.Column(db.Integer, db.ForeignKey('groups.id'), nullable=False)
+    
     subcategories = db.relationship('Subcategory', backref='category', lazy=True, cascade="all, delete-orphan")
     links = db.relationship('Link', backref='category', cascade='all, delete-orphan')
 
@@ -48,7 +77,7 @@ class Link(db.Model):
     title = db.Column(db.String(100), nullable=False)
     url = db.Column(db.String(500), nullable=False)
     source = db.Column(db.String(50))
-    image_url = db.Column(db.String(500), nullable=True) # 🌟 儲存預覽圖片的網址
+    image_url = db.Column(db.String(500), nullable=True) 
     category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=False)
     subcategory_id = db.Column(db.Integer, db.ForeignKey('subcategories.id'), nullable=True)
 
@@ -60,27 +89,66 @@ def get_current_user():
         return None
     return User.query.filter_by(username=username).first()
 
+def get_personal_group_id(user):
+    user_group = UserGroup.query.join(Group).filter(
+        UserGroup.user_id == user.id,
+        Group.is_personal == True
+    ).first()
+    return user_group.group_id if user_group else None
+
+# 新增：動態判斷前端請求的是哪個群組
+def get_requested_group_id(user):
+    # 嘗試從 Header 取得前端傳來的群組 ID
+    group_id_str = request.headers.get('X-Group-Id')
+    
+    if group_id_str:
+        group_id = int(group_id_str)
+        # 安全檢查：確定使用者擁有這個群組的權限
+        user_group = UserGroup.query.filter_by(user_id=user.id, group_id=group_id).first()
+        if user_group:
+            return group_id
+        else:
+            return None # 傳了 ID 但沒權限，回傳 None
+            
+    # 如果前端沒有特別指定，就預設回傳他的私人空間
+    return get_personal_group_id(user)
+
 # ================= API 路由設計 =================
 
 # 登入與註冊系統
 
 @app.route('/api/register', methods=['POST'])
 def register():
-    data = request.json
-    
-    if data.get('invite_code') != os.getenv('INVITE_CODE'):
-        return {"error": "註冊碼錯誤，拒絕註冊！"}, 403
+    data = request.get_json()
+    username = data.get('username')
+    password = data.get('password')
 
-    if User.query.filter_by(username=data.get('username')).first():
-        return {"error": "這個帳號已經被註冊過囉！"}, 400
+    if not username or not password:
+        return jsonify({"error": "請填寫帳號與密碼"}), 400
 
-    hashed_password = generate_password_hash(data.get('password'))
-    new_user = User(username=data.get('username'), password_hash=hashed_password)
-    
-    db.session.add(new_user)
-    db.session.commit()
-    
-    return {"message": "帳號建立成功！"}, 201
+    existing_user = User.query.filter_by(username=username).first()
+    if existing_user:
+        return jsonify({"error": "這個帳號已經被註冊過了"}), 400
+
+    try:
+        new_user = User(username=username, password_hash=generate_password_hash(password))
+        db.session.add(new_user)
+        db.session.flush() 
+
+        personal_group = Group(name=f"{username} 的私人空間", is_personal=True)
+        db.session.add(personal_group)
+        db.session.flush() 
+
+        user_group = UserGroup(user_id=new_user.id, group_id=personal_group.id, role='owner')
+        db.session.add(user_group)
+
+        db.session.commit()
+        
+        return jsonify({"message": "註冊成功！"}), 201
+
+    except Exception as e:
+        db.session.rollback() 
+        return jsonify({"error": "註冊失敗，請稍後再試"}), 500
 
 
 @app.route('/api/login', methods=['POST'])
@@ -107,57 +175,133 @@ def serve_static(filename):
         return send_file(filename)
     return {"error": "找不到檔案或沒有讀取權限"}, 404
 
+# ================= 群組與協作系統 API =================
 
-# ================= 網頁預覽抓取 API (爬蟲核心) =================
-@app.route('/api/fetch-preview', methods=['POST'])
-def fetch_preview():
+# 🌟 新增：取得使用者所屬的所有群組列表 (前端下拉選單需要用到)
+@app.route('/api/my_groups', methods=['GET'])
+def get_my_groups():
+    user = get_current_user()
+    if not user:
+        return {"error": "未登入"}, 401
+
+    # 找出該使用者所有的群組關聯
+    user_groups = UserGroup.query.filter_by(user_id=user.id).all()
+    
+    result = []
+    for ug in user_groups:
+        group = ug.group
+        result.append({
+            "id": group.id,
+            "name": group.name,
+            "is_personal": group.is_personal,
+            "role": ug.role
+        })
+    
+    # 排序：確保「私人空間」永遠排在陣列的第一個
+    result.sort(key=lambda x: not x['is_personal'])
+    
+    return jsonify(result), 200
+
+# 1. 建立新的共用群組
+@app.route('/api/groups', methods=['POST'])
+def create_group():
     user = get_current_user()
     if not user:
         return {"error": "未登入"}, 401
 
     data = request.json
-    target_url = data.get('url')
-    if not target_url:
-        return {"error": "缺少網址"}, 400
+    name = data.get('name')
+    if not name:
+        return {"error": "缺少群組名稱"}, 400
 
     try:
-        # 1. 偽裝成正常瀏覽器發送請求
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
-        response = requests.get(target_url, headers=headers, timeout=5)
-        response.encoding = 'utf-8' # 確保中文不變亂碼
+        new_group = Group(name=name, is_personal=False)
+        db.session.add(new_group)
+        db.session.flush() 
+
+        user_group = UserGroup(user_id=user.id, group_id=new_group.id, role='owner')
+        db.session.add(user_group)
         
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # 2. 尋找圖片 (優先找 og:image)
-        image = ""
-        og_image = soup.find("meta", property="og:image")
-        if og_image and og_image.get("content"):
-            image = og_image["content"]
-            
-        # 3. 尋找標題 (優先找 og:title，沒有再找 <title>)
-        title = ""
-        og_title = soup.find("meta", property="og:title")
-        if og_title and og_title.get("content"):
-            title = og_title["content"]
-        elif soup.title and soup.title.string:
-            title = soup.title.string.strip()
-            
-        return {"title": title, "image": image}, 200
+        db.session.commit()
+        return {"message": "群組建立成功", "group_id": new_group.id}, 201
 
     except Exception as e:
-        print(f"抓取預覽失敗: {e}")
-        # 如果抓取失敗 (例如網站阻擋爬蟲)，回傳空字串，讓使用者自己手填
-        return {"title": "", "image": ""}, 200
+        db.session.rollback()
+        return {"error": "群組建立失敗"}, 500
 
 
-# 取得所有分類與連結 (加入使用者過濾與圖片網址回傳)
+# 2. 產生或取得該群組的邀請碼
+@app.route('/api/groups/<int:group_id>/invite', methods=['POST'])
+def generate_invite(group_id):
+    user = get_current_user()
+    if not user:
+        return {"error": "未登入"}, 401
+
+    user_group = UserGroup.query.filter_by(user_id=user.id, group_id=group_id, role='owner').first()
+    if not user_group:
+        return {"error": "權限不足：只有管理員可以產生邀請連結"}, 403
+
+    group = Group.query.get(group_id)
+    if not group:
+        return {"error": "找不到該群組"}, 404
+
+    if not group.invite_token:
+        group.invite_token = str(uuid.uuid4())
+        db.session.commit()
+
+    return {"invite_token": group.invite_token}, 200
+
+
+# 3. 透過邀請碼加入群組
+@app.route('/api/groups/join', methods=['POST'])
+def join_group():
+    user = get_current_user()
+    if not user:
+        return {"error": "未登入"}, 401
+
+    data = request.json
+    token = data.get('token')
+    if not token:
+        return {"error": "缺少邀請碼"}, 400
+
+    group = Group.query.filter_by(invite_token=token).first()
+    if not group:
+        return {"error": "無效的邀請連結"}, 404
+
+    existing_member = UserGroup.query.filter_by(user_id=user.id, group_id=group.id).first()
+    if existing_member:
+        return {"message": "你已經在這個群組裡面了，不需重複加入"}, 200
+
+    try:
+        new_member = UserGroup(user_id=user.id, group_id=group.id, role='member')
+        db.session.add(new_member)
+        db.session.commit()
+        return {"message": f"成功加入「{group.name}」群組！", "group_id": group.id}, 200
+
+    except Exception as e:
+        db.session.rollback()
+        return {"error": "加入失敗，請稍後再試"}, 500
+
+
+# ================= 網頁預覽抓取 API (爬蟲核心) =================
+@app.route('/api/fetch-preview', methods=['POST'])
+def fetch_preview():
+    return {"title": "功能開發中", "image_url": ""}, 200
+
+
+# 取得所有分類與連結
 @app.route('/api/categories', methods=['GET'])
 def get_categories():
     user = get_current_user()
     if not user:
         return {"error": "未登入或授權失敗"}, 401
 
-    categories = Category.query.filter_by(user_id=user.id).all()
+    # 🌟 修改：透過 Header 判斷使用者現在想看哪一個群組的資料
+    group_id = get_requested_group_id(user) 
+    if not group_id:
+        return {"error": "找不到指定的群組或權限不足"}, 403
+
+    categories = Category.query.filter_by(group_id=group_id).all() 
     result = []
     
     for cat in categories:
@@ -166,7 +310,6 @@ def get_categories():
         cat_data = {
             "id": cat.id,
             "name": cat.name,
-            # 🌟 補上 "image_url": l.image_url
             "links": [{"id": l.id, "title": l.title, "url": l.url, "source": l.source, "image_url": l.image_url} for l in direct_links],
             "subcategories": []
         }
@@ -176,7 +319,6 @@ def get_categories():
             cat_data["subcategories"].append({
                 "id": sub.id,
                 "name": sub.name,
-                # 🌟 補上 "image_url": l.image_url
                 "links": [{"id": l.id, "title": l.title, "url": l.url, "source": l.source, "image_url": l.image_url} for l in sub_links]
             })
             
@@ -196,7 +338,12 @@ def add_link():
     if not data or not data.get('url') or not data.get('category_id'):
         return {"error": "缺少必要欄位 (需包含 url 與 category_id)"}, 400
         
-    category = Category.query.filter_by(id=data['category_id'], user_id=user.id).first()
+    # 🌟 修改：確保是新增到使用者目前請求的群組
+    group_id = get_requested_group_id(user)
+    if not group_id:
+        return {"error": "找不到指定的群組或權限不足"}, 403
+
+    category = Category.query.filter_by(id=data['category_id'], group_id=group_id).first() 
     if not category:
         return {"error": "找不到大分類或權限不足"}, 403
 
@@ -204,7 +351,7 @@ def add_link():
         title=data.get('title', '無標題'),
         url=data['url'],
         source=data.get('source', '未提供'),
-        image_url=data.get('image_url', ''), # 🌟 儲存從前端傳來的圖片網址
+        image_url=data.get('image_url', ''), 
         category_id=data['category_id'],
         subcategory_id=data.get('subcategory_id') 
     )
@@ -220,9 +367,14 @@ def delete_link(link_id):
     if not user:
         return {"error": "未登入"}, 401
 
+    # 🌟 修改
+    group_id = get_requested_group_id(user)
+    if not group_id:
+        return {"error": "找不到指定的群組或權限不足"}, 403
+
     link_to_delete = Link.query.get(link_id)
     
-    if not link_to_delete or link_to_delete.category.user_id != user.id:
+    if not link_to_delete or link_to_delete.category.group_id != group_id: 
         return {"error": "找不到該連結或權限不足"}, 404
         
     try:
@@ -233,8 +385,6 @@ def delete_link(link_id):
         db.session.rollback()
         return {"error": str(e)}, 500
 
-
-# 分類管理系統
 
 # 新增大分類
 @app.route('/api/categories', methods=['POST'])
@@ -247,7 +397,12 @@ def create_category():
     if not data or not data.get('name'):
         return {"error": "缺少分類名稱"}, 400
     
-    new_cat = Category(name=data['name'], user_id=user.id)
+    # 🌟 修改
+    group_id = get_requested_group_id(user)
+    if not group_id:
+        return {"error": "找不到指定的群組或權限不足"}, 403
+
+    new_cat = Category(name=data['name'], group_id=group_id) 
     db.session.add(new_cat)
     db.session.commit()
     
@@ -265,7 +420,12 @@ def create_subcategory(category_id):
     if not data or not data.get('name'):
         return {"error": "缺少子分類名稱"}, 400
 
-    category = Category.query.filter_by(id=category_id, user_id=user.id).first()
+    # 🌟 修改
+    group_id = get_requested_group_id(user)
+    if not group_id:
+        return {"error": "找不到指定的群組或權限不足"}, 403
+
+    category = Category.query.filter_by(id=category_id, group_id=group_id).first() 
     if not category:
         return {"error": "找不到該分類或權限不足"}, 404
 
@@ -291,11 +451,16 @@ def rename_category():
     if not all([item_type, item_id, new_name]):
         return {"error": "缺少必要欄位"}, 400
 
+    # 🌟 修改
+    group_id = get_requested_group_id(user)
+    if not group_id:
+        return {"error": "找不到指定的群組或權限不足"}, 403
+
     if item_type == 'category':
-        item = Category.query.filter_by(id=item_id, user_id=user.id).first()
+        item = Category.query.filter_by(id=item_id, group_id=group_id).first() 
     elif item_type == 'subcategory':
         item = Subcategory.query.get(item_id)
-        if item and item.category.user_id != user.id:
+        if item and item.category.group_id != group_id: 
             return {"error": "權限不足"}, 403
     else:
         return {"error": "無效的項目類型"}, 400
@@ -320,11 +485,16 @@ def delete_any_category():
     item_type = data.get('type') 
     item_id = data.get('id')
     
+    # 🌟 修改
+    group_id = get_requested_group_id(user)
+    if not group_id:
+        return {"error": "找不到指定的群組或權限不足"}, 403
+
     if item_type == 'category':
-        item = Category.query.filter_by(id=item_id, user_id=user.id).first()
+        item = Category.query.filter_by(id=item_id, group_id=group_id).first() 
     else:
         item = Subcategory.query.get(item_id)
-        if item and item.category.user_id != user.id:
+        if item and item.category.group_id != group_id: 
             return {"error": "權限不足"}, 403
             
         if item:
@@ -338,13 +508,6 @@ def delete_any_category():
     db.session.delete(item)
     db.session.commit()
     return {"message": "處理成功！"}
-
-
-# 初始化資料庫 (僅第一次執行時需要)
-@app.route("/api/init-db", methods=['GET'])
-def init_db():
-    db.create_all()
-    return {"message": "Database initialized successfully"}, 200
 
 
 if __name__ == '__main__':

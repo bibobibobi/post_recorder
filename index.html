@@ -43,6 +43,18 @@
                 <button onclick="openCategoryModal()" class="header-btn"
                     style="color: #1c1c1e; border: 1px solid #1c1c1e;">管理分類</button>
             </div>
+            <div id="group-workspace-panel"
+                style="padding: 10px; background: #f8f9fa; border-radius: 8px; margin-bottom: 20px;">
+                <label for="group-select" style="font-weight: bold;">🗂️ 目前工作區：</label>
+                <select id="group-select" onchange="switchGroup(this.value)"
+                    style="padding: 5px; margin-right: 10px; border-radius: 4px;">
+                </select>
+
+                <button onclick="createNewGroup()" style="padding: 5px 10px; cursor: pointer;">➕ 建立群組</button>
+                <button id="btn-invite" onclick="generateInviteLink()"
+                    style="display: none; padding: 5px 10px; cursor: pointer; background-color: #007AFF; color: white; border: none; border-radius: 4px;">🔗
+                    產生邀請連結</button>
+            </div>
         </div>
     </div>
 
@@ -67,12 +79,12 @@
                 </select>
 
                 <select id="new-category-select" onchange="handleCategoryChange()" required>
-                        <option value="" disabled selected>1. 選擇大分類</option>
-                    </select>
-                    
-                    <select id="new-subcategory-select" onchange="handleSubcategoryChange()" disabled>
-                        <option value="" disabled selected>2. 請先選擇大分類</option>
-                    </select>
+                    <option value="" disabled selected>1. 選擇大分類</option>
+                </select>
+
+                <select id="new-subcategory-select" onchange="handleSubcategoryChange()" disabled>
+                    <option value="" disabled selected>2. 請先選擇大分類</option>
+                </select>
 
                 <button type="submit" class="submit-btn">儲存連結</button>
             </form>

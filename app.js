@@ -1,12 +1,189 @@
+// 🌟 新增：全域變數，用來記憶目前所在的群組 ID
+let currentGroupId = null;
+
+// 🌟 新增：網頁載入時的第一道檢查關卡 (攔截邀請碼)
+window.addEventListener('DOMContentLoaded', () => {
+    // 解析目前網址的參數
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+    
+    if (token) {
+        // 如果發現有 token，就觸發加入群組的動作
+        joinGroupByToken(token);
+    }
+});
+
+// 🌟 新增：透過邀請碼加入群組的函式
+async function joinGroupByToken(token) {
+    const username = localStorage.getItem('saved_username'); // 修改：配合你原本的鍵名 saved_username
+    if (!username) {
+        alert('請先登入或註冊！登入後再點擊一次邀請連結即可加入。');
+        return; 
+    }
+
+    try {
+        const response = await fetch('http://127.0.0.1:5002/api/groups/join', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Username': username 
+            },
+            body: JSON.stringify({ token: token })
+        });
+        
+        const data = await response.json();
+        if (response.ok) {
+            alert(data.message);
+            // 加入成功後，把網址上的 token 擦掉，讓網址恢復乾淨
+            window.history.replaceState({}, document.title, window.location.pathname);
+            // 重新載入群組清單與畫面
+            await loadMyGroups();
+            fetchAndRenderApp();
+        } else {
+            alert(data.error);
+        }
+    } catch (error) {
+        console.error('加入群組失敗:', error);
+    }
+}
+
+// ================= 群組與協作功能 =================
+
+// 1. 載入使用者的群組清單
+async function loadMyGroups() {
+    const username = localStorage.getItem('saved_username'); // 修改：配合你原本的鍵名 saved_username
+    if (!username) return;
+
+    try {
+        const response = await fetch('http://127.0.0.1:5002/api/my_groups', {
+            headers: { 'X-Username': username }
+        });
+        const groups = await response.json();
+
+        const select = document.getElementById('group-select');
+        if (!select) return;
+        select.innerHTML = ''; // 清空舊選項
+
+        groups.forEach(group => {
+            const option = document.createElement('option');
+            option.value = group.id;
+            option.textContent = group.name;
+            option.dataset.isPersonal = group.is_personal;
+            option.dataset.role = group.role;
+            select.appendChild(option);
+        });
+
+        // 預設選擇邏輯
+        if (!currentGroupId && groups.length > 0) {
+            currentGroupId = groups[0].id;
+        } else if (currentGroupId) {
+            select.value = currentGroupId;
+        }
+
+        updateInviteButtonVisibility();
+
+    } catch (error) {
+        console.error('載入群組失敗:', error);
+    }
+}
+
+// 2. 切換群組
+function switchGroup(groupId) {
+    currentGroupId = groupId;
+    updateInviteButtonVisibility();
+
+    // 🌟 修改：切換群組時，呼叫你原本負責刷新畫面的 fetchAndRenderApp()
+    if (typeof fetchAndRenderApp === 'function') {
+        fetchAndRenderApp(); 
+    }
+}
+
+// 輔助函式：判斷要不要顯示「產生邀請連結」按鈕
+function updateInviteButtonVisibility() {
+    const select = document.getElementById('group-select');
+    if (!select || select.options.length === 0) return;
+    
+    const selectedOption = select.options[select.selectedIndex];
+    const btnInvite = document.getElementById('btn-invite');
+
+    if (!selectedOption || !btnInvite) return;
+
+    const isPersonal = selectedOption.dataset.isPersonal === 'true';
+    const role = selectedOption.dataset.role;
+
+    // 只有「非空間群組」且身分是管理員才能看到按鈕
+    if (!isPersonal && role === 'owner') {
+        btnInvite.style.display = 'inline-block';
+    } else {
+        btnInvite.style.display = 'none';
+    }
+}
+
+// 3. 建立新群組
+async function createNewGroup() {
+    const groupName = prompt('請輸入新群組的名稱 (例如：期末報告專案)：');
+    if (!groupName) return;
+
+    const username = localStorage.getItem('saved_username'); // 修改：配合你原本的鍵名 saved_username
+    try {
+        const response = await fetch('http://127.0.0.1:5002/api/groups', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Username': username
+            },
+            body: JSON.stringify({ name: groupName })
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+            alert('群組建立成功！');
+            currentGroupId = data.group_id; // 跳轉到新群組
+            await loadMyGroups(); 
+            switchGroup(currentGroupId); 
+        } else {
+            alert(data.error);
+        }
+    } catch (error) {
+        console.error('建立群組失敗:', error);
+    }
+}
+
+// 4. 產生邀請連結
+async function generateInviteLink() {
+    const username = localStorage.getItem('saved_username'); // 修改：配合你原本的鍵名 saved_username
+    if (!currentGroupId) return;
+
+    try {
+        const response = await fetch(`http://127.0.0.1:5002/api/groups/${currentGroupId}/invite`, {
+            method: 'POST',
+            headers: { 'X-Username': username }
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+            const inviteUrl = `${window.location.origin}${window.location.pathname}?token=${data.invite_token}`;
+            
+            navigator.clipboard.writeText(inviteUrl).then(() => {
+                alert(`✅ 邀請連結已複製到剪貼簿！\n\n您可以直接貼上傳給朋友了：\n${inviteUrl}`);
+            }).catch(err => {
+                prompt('請手動複製以下邀請連結：', inviteUrl);
+            });
+        } else {
+            alert(data.error || '產生邀請連結失敗');
+        }
+    } catch (error) {
+        console.error('產生邀請失敗:', error);
+    }
+}
+
 // ================= 全域 API 攔截器 (自動夾帶通行證) =================
 const originalFetch = window.fetch;
 window.fetch = async function (resource, config) {
-    // 1. 如果是登入或註冊 API，不需要通行證，直接放行
     if (typeof resource === 'string' && (resource.includes('/api/login') || resource.includes('/api/register'))) {
         return originalFetch(resource, config);
     }
 
-    // 2. 其他所有的 API 請求，都在背景偷偷塞入 X-Username 標頭
     if (!config) config = {};
     if (!config.headers) config.headers = {};
 
@@ -15,16 +192,18 @@ window.fetch = async function (resource, config) {
         config.headers['X-Username'] = username;
     }
 
+    // 🌟 新增：利用攔截器特性，自動為除了登入註冊以外的所有 API 請求塞入群組 ID
+    if (currentGroupId) {
+        config.headers['X-Group-Id'] = currentGroupId;
+    }
+
     return originalFetch(resource, config);
 };
 
 // ================= 登入與畫面切換邏輯 =================
 
-// 1. 處理登入請求
-// 記錄目前的模式 (true = 登入模式, false = 註冊模式)
 let isLoginMode = true;
 
-// 切換登入與註冊模式的畫面
 function toggleAuthMode() {
     isLoginMode = !isLoginMode;
     const inviteInput = document.getElementById('invite-code-input');
@@ -34,20 +213,17 @@ function toggleAuthMode() {
     const formTitle = document.getElementById('form-title');
     const messageEl = document.getElementById('login-message');
 
-    // 清空錯誤訊息
     messageEl.textContent = '';
     document.getElementById('password-input').value = '';
     inviteInput.value = '';
 
     if (isLoginMode) {
-        // 切換回登入畫面
         formTitle.textContent = "私人連結收藏庫";
         inviteInput.style.display = 'none';
         submitBtn.textContent = '登入';
         modeText.textContent = '還沒有帳號嗎？';
         modeLink.textContent = '點此註冊';
     } else {
-        // 切換到註冊畫面
         formTitle.textContent = "建立帳號";
         inviteInput.style.display = 'block';
         submitBtn.textContent = '註冊';
@@ -56,7 +232,6 @@ function toggleAuthMode() {
     }
 }
 
-// 處理送出按鈕 (整合登入與註冊 API)
 async function handleSubmit() {
     const username = document.getElementById('username-input').value;
     const password = document.getElementById('password-input').value;
@@ -75,7 +250,6 @@ async function handleSubmit() {
 
     messageEl.textContent = isLoginMode ? "登入中..." : "註冊中...";
 
-    // 根據目前模式，決定要打哪一支 API 以及要傳送什麼資料
     const endpoint = isLoginMode ? '/api/login' : '/api/register';
     const payload = isLoginMode ? { username, password } : { username, password, invite_code: inviteCode };
 
@@ -90,17 +264,14 @@ async function handleSubmit() {
 
         if (response.ok) {
             if (isLoginMode) {
-                // 登入成功：存入通行證並切換畫面
                 localStorage.setItem('saved_username', result.username);
                 showAppView(result.username);
             } else {
-                // 註冊成功：提示使用者，並自動切換回登入模式
                 alert("🎉 帳號建立成功！請使用新帳號登入。");
                 toggleAuthMode();
-                document.getElementById('password-input').value = ''; // 清空密碼框確保安全
+                document.getElementById('password-input').value = ''; 
             }
         } else {
-            // 失敗 (可能是密碼錯，或是通關密語錯)
             messageEl.textContent = result.error || "發生未知錯誤";
         }
     } catch (error) {
@@ -109,14 +280,15 @@ async function handleSubmit() {
     }
 }
 
-// 2. 處理登出請求
 function handleLogout() {
-    // 清除通行證
     localStorage.removeItem('saved_username');
-    // 把畫面切回登入頁
+    // 🌟 新增：登出時清空群組記憶，並將面板重新隱藏
+    currentGroupId = null;
+    const groupPanel = document.getElementById('group-workspace-panel');
+    if (groupPanel) groupPanel.style.display = 'none';
+
     document.getElementById('main-app-section').style.display = 'none';
     document.getElementById('login-section').style.display = 'flex';
-    // 清空輸入框
     document.getElementById('username-input').value = '';
     document.getElementById('password-input').value = '';
     document.getElementById('invite-code-input').value = '';
@@ -124,33 +296,33 @@ function handleLogout() {
     document.getElementById('app-content').innerHTML = '';
 
     if (!isLoginMode) {
-        toggleAuthMode(); // 如果當前在註冊模式，登出時自動切回登入模式
+        toggleAuthMode(); 
     }
 }
 
 // 3. 控制畫面切換，並啟動抓取資料
-function showAppView(username) {
-    // 隱藏登入區塊，顯示主程式區塊
+async function showAppView(username) {
     document.getElementById('login-section').style.display = 'none';
     document.getElementById('main-app-section').style.display = 'block';
 
-    // 顯示使用者名稱
+    // 🌟 新增：登入成功進入主畫面時，將群組控制面板顯示出來
+    const groupPanel = document.getElementById('group-workspace-panel');
+    if (groupPanel) groupPanel.style.display = 'block';
+
     document.getElementById('user-display-name').textContent = username;
 
+    // 🌟 修改：先載入群組清單（建立下拉選單數據），再開始抓資料渲染畫面
+    await loadMyGroups();
     fetchAndRenderApp();
 }
 
 // ================= 初始化檢查 =================
 
-// 網頁一載入時，先檢查有沒有通行證
 document.addEventListener('DOMContentLoaded', () => {
     const savedUser = localStorage.getItem('saved_username');
 
     if (savedUser) {
-        // 如果有通行證，直接跳過登入畫面進到主程式
         showAppView(savedUser);
-    } else {
-        // 如果沒有，就乖乖停在登入畫面 (預設狀態，不需要特別動作)
     }
 });
 
@@ -179,7 +351,6 @@ async function fetchAndRenderApp() {
         categories.forEach(cat => {
             const catName = cat.name || cat.categoryName || "未命名大分類";
 
-            // 1. 生成大分類的手風琴按鈕
             htmlContent += `
                 <button class="accordion-header" onclick="toggleAccordion(this)">
                     <span>📁 ${catName}</span>
@@ -192,27 +363,22 @@ async function fetchAndRenderApp() {
             let chipsHtml = '';
             let cardsHtml = '';
 
-            // 抓出有包含連結的小分類
             const validSubs = cat.subcategories ? cat.subcategories.filter(sub => sub.links && sub.links.length > 0) : [];
 
-            // 2. 如果有小分類，就生成頂部的「橫向滑動篩選列」
             if (validSubs.length > 0) {
                 chipsHtml += `<div class="filter-chips-container">`;
-                chipsHtml += `<div class="filter-chip active" onclick="filterLinks(this, 'all')">全部</div>`; // 預設全部
+                chipsHtml += `<div class="filter-chip active" onclick="filterLinks(this, 'all')">全部</div>`; 
 
-                // 如果大分類自己也有直接的連結，加一個直屬標籤
                 if (cat.links && cat.links.length > 0) {
                     chipsHtml += `<div class="filter-chip" onclick="filterLinks(this, 'none')">📌 直屬連結</div>`;
                 }
 
-                // 列出所有小分類標籤
                 validSubs.forEach(sub => {
                     chipsHtml += `<div class="filter-chip" onclick="filterLinks(this, '${sub.id}')">${sub.name}</div>`;
                 });
                 chipsHtml += `</div>`;
             }
 
-            // 3. 畫出「直接屬於大分類」的連結 (標記 subId 為 'none')
             if (cat.links && cat.links.length > 0) {
                 hasAnyLink = true;
                 cat.links.forEach(link => {
@@ -220,7 +386,6 @@ async function fetchAndRenderApp() {
                 });
             }
 
-            // 4. 畫出「屬於小分類」的連結 (標記真實的 subId)
             if (validSubs.length > 0) {
                 validSubs.forEach(sub => {
                     hasAnyLink = true;
@@ -230,18 +395,17 @@ async function fetchAndRenderApp() {
                 });
             }
 
-            // 5. 組合篩選列與卡片
             if (hasAnyLink) {
                 htmlContent += chipsHtml + `<div class="category-cards-wrapper">` + cardsHtml + `</div>`;
             } else {
                 htmlContent += `<p style="color: #8e8e93; font-size: 14px; text-align: center; margin: 10px 0;">此分類尚無內容</p>`;
             }
 
-            htmlContent += `</div>`; // 結束 accordion-content
+            htmlContent += `</div>`; 
         });
 
         appContent.innerHTML = htmlContent;
-        enableDragScroll(); // 確保重新綁定左滑刪除功能
+        enableDragScroll(); 
 
     } catch (error) {
         console.error("載入失敗：", error);
@@ -249,76 +413,59 @@ async function fetchAndRenderApp() {
     }
 }
 
-// 產生單一連結卡片的輔助函式 (iOS 備忘錄風格)
 function generateLinkCard(link, subName, subId) {
-    // 判斷是否有抓到圖片，若無則顯示預設的灰色方塊
     let imageHtml = '';
     if (link.image_url) {
         imageHtml = `<img src="${link.image_url}" alt="preview" class="card-thumbnail">`;
     } else {
-        // 沒有圖片時的預設圖示 (顯示一個灰底加上連結符號)
         imageHtml = `<div class="card-thumbnail fallback-thumbnail">🔗</div>`;
     }
 
     return `
     <div class="swipe-container filterable-card" data-sub-id="${subId}">
-        <!-- 把整張卡片變成一個超連結 <a> 標籤 -->
         <a href="${link.url}" target="_blank" class="swipe-content link-card memo-style-card">
-            
-            <!-- 左側：文字區塊 -->
             <div class="card-text-area">
                 <div class="card-title">${link.title}</div>
                 <div class="card-source">${link.source}</div>
             </div>
-            
-            <!-- 右側：縮圖區塊 -->
             <div class="card-image-area">
                 ${imageHtml}
             </div>
-            
         </a>
-        
         <div class="swipe-actions">
             <button onclick="deleteLink(${link.id}, this)">刪除</button>
         </div>
     </div>`;
 }
 
-// ================= 標籤篩選邏輯 =================
 function filterLinks(clickedChip, targetSubId) {
-    // 1. 切換標籤的視覺狀態 (反白目前點擊的標籤)
     const container = clickedChip.parentElement;
     container.querySelectorAll('.filter-chip').forEach(chip => chip.classList.remove('active'));
     clickedChip.classList.add('active');
 
-    // 2. 找到同一層級下方的卡片容器，對卡片進行過濾
     const wrapper = container.nextElementSibling;
     const cards = wrapper.querySelectorAll('.filterable-card');
 
     cards.forEach(card => {
-        card.scrollLeft = 0; // 每次切換篩選都把卡片滾回最左邊，避免誤觸刪除
-        // 如果點擊「全部」，就全部顯示 (swipe-container 預設是 flex)
+        card.scrollLeft = 0; 
         if (targetSubId === 'all') {
             card.style.display = 'flex';
         } else {
-            // 比對卡片身上的 data-sub-id 是否符合點擊的標籤
             if (card.getAttribute('data-sub-id') === String(targetSubId)) {
                 card.style.display = 'flex';
             } else {
-                card.style.display = 'none'; // 不符合的瞬間隱藏
+                card.style.display = 'none'; 
             }
         }
     });
 }
 
-// 手風琴的開關邏輯 (含自動收合其他分類)
 function toggleAccordion(clickedHeader) {
     const content = clickedHeader.nextElementSibling;
     const arrow = clickedHeader.querySelector('.arrow-icon');
 
-    resetAllSwipes(); // 每次點擊手風琴都先重置所有卡片的滑動狀態，避免被卡住
+    resetAllSwipes(); 
 
-    // 步驟 1：把其他打開的都關起來 (自動收合功能)
     const allHeaders = document.querySelectorAll('.accordion-header');
     allHeaders.forEach(header => {
         if (header !== clickedHeader) {
@@ -327,7 +474,6 @@ function toggleAccordion(clickedHeader) {
         }
     });
 
-    // 步驟 2：切換目前點擊的這個分類
     if (content.style.display === 'block') {
         content.style.display = 'none';
         arrow.style.transform = 'rotate(0deg)';
@@ -340,25 +486,19 @@ function toggleAccordion(clickedHeader) {
 
 // ================= 新增連結功能 (自動解析版) =================
 
-// 用來暫存從後端抓回來的大分類資料，避免一直重複發送請求
 let cachedCategoriesData = [];
-// 🌟 新增：用來暫存剛抓到的預覽圖片網址
 let currentPreviewImage = '';
 
-// 🌟 核心魔法：自動抓取網址預覽
 async function fetchUrlPreview() {
     const urlInput = document.getElementById('new-url').value;
     const titleInput = document.getElementById('new-title');
 
-    // 如果沒有輸入內容，或是開頭不是 http，就不浪費時間解析
     if (!urlInput || !urlInput.startsWith('http')) return;
 
-    // 提示使用者正在處理中，營造流暢感
     const originalPlaceholder = titleInput.placeholder;
     titleInput.placeholder = "🔄 正在自動解析網址...";
 
     try {
-        // 呼叫我們剛寫好的爬蟲 API
         const response = await fetch('http://127.0.0.1:5002/api/fetch-preview', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -368,22 +508,19 @@ async function fetchUrlPreview() {
         if (response.ok) {
             const data = await response.json();
 
-            // 溫柔設計：只有在使用者「還沒手動打標題」的時候，才幫他自動填寫
             if (data.title && !titleInput.value) {
                 titleInput.value = data.title;
             }
 
-            // 將圖片網址偷偷存在背景，等等按「新增」時一起打包送給資料庫
             currentPreviewImage = data.image || '';
         }
     } catch (error) {
         console.error("解析失敗：", error);
     } finally {
-        titleInput.placeholder = originalPlaceholder; // 恢復原本的 placeholder
+        titleInput.placeholder = originalPlaceholder; 
     }
 }
 
-// 🌟 綁定事件：當網頁載入完成後，讓網址輸入框擁有「失去焦點即解析」的能力
 document.addEventListener('DOMContentLoaded', () => {
     const urlField = document.getElementById('new-url');
     if (urlField) {
@@ -391,15 +528,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// 1. 打開視窗並重置選單
 async function openAddModal() {
     document.getElementById('add-modal').style.display = 'flex';
     document.getElementById('add-link-form').reset();
-    currentPreviewImage = ''; // 🌟 每次打開都要清空上一次的圖片紀錄
+    currentPreviewImage = ''; 
     await refreshCategorySelects();
 }
 
-// 2. 向後端抓資料，並渲染大分類選單 (支援自動選取特定 ID)
 async function refreshCategorySelects(autoSelectCatId = null, autoSelectSubId = null) {
     const catSelect = document.getElementById('new-category-select');
     const subSelect = document.getElementById('new-subcategory-select');
@@ -418,10 +553,8 @@ async function refreshCategorySelects(autoSelectCatId = null, autoSelectSubId = 
             catSelect.innerHTML += `<option value="${cat.id}">📁 ${catName}</option>`;
         });
 
-        // 🌟 魔法按鈕：放在選單最下方
         catSelect.innerHTML += `<option value="ADD_NEW_CAT" style="color: #007AFF; font-weight: bold;">新增大分類...</option>`;
 
-        // 如果有指定要自動選取剛建立的大分類
         if (autoSelectCatId) {
             catSelect.value = autoSelectCatId;
             handleCategoryChange(autoSelectSubId);
@@ -431,19 +564,16 @@ async function refreshCategorySelects(autoSelectCatId = null, autoSelectSubId = 
     }
 }
 
-// 3. 當「大分類」被改變時觸發
 async function handleCategoryChange(autoSelectSubId = null) {
     const catSelect = document.getElementById('new-category-select');
     const subSelect = document.getElementById('new-subcategory-select');
     const catId = catSelect.value;
 
-    // 如果使用者點擊了「新增大分類...」
     if (catId === "ADD_NEW_CAT") {
-        catSelect.value = ""; // 先把選單退回空白狀態
+        catSelect.value = ""; 
         const name = prompt("請輸入新的「大分類」名稱：");
         if (!name) return;
 
-        // 呼叫 API 在背景建立大分類
         const res = await fetch('http://127.0.0.1:5002/api/categories', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -452,14 +582,12 @@ async function handleCategoryChange(autoSelectSubId = null) {
         const data = await res.json();
 
         if (res.ok) {
-            // 建立成功後，重新抓資料，並自動幫使用者選好剛剛建的那一個！
             await refreshCategorySelects(data.id);
-            fetchAndRenderApp(); // 順便更新首頁背景
+            fetchAndRenderApp(); 
         }
         return;
     }
 
-    // 正常選擇大分類 ➡️ 展開對應的小分類選單
     const selectedCat = cachedCategoriesData.find(c => c.id == catId);
     if (!selectedCat) return;
 
@@ -473,7 +601,6 @@ async function handleCategoryChange(autoSelectSubId = null) {
         });
     }
 
-    // 🌟 魔法按鈕：新增小分類
     subSelect.innerHTML += `<option value="ADD_NEW_SUB" style="color: #007AFF; font-weight: bold;">新增小分類...</option>`;
 
     if (autoSelectSubId) {
@@ -481,14 +608,12 @@ async function handleCategoryChange(autoSelectSubId = null) {
     }
 }
 
-// 4. 當「小分類」被改變時觸發
 async function handleSubcategoryChange() {
     const catSelect = document.getElementById('new-category-select');
     const subSelect = document.getElementById('new-subcategory-select');
 
-    // 如果使用者點擊了「新增小分類...」
     if (subSelect.value === "ADD_NEW_SUB") {
-        subSelect.value = "DIRECT"; // 先退回直接放入
+        subSelect.value = "DIRECT"; 
         const name = prompt("請輸入新的「小分類」名稱：");
         if (!name) return;
 
@@ -501,20 +626,17 @@ async function handleSubcategoryChange() {
         const data = await res.json();
 
         if (res.ok) {
-            // 建立成功，刷新並自動選好剛剛建的小分類！
             await refreshCategorySelects(catId, data.id);
             fetchAndRenderApp();
         }
     }
 }
 
-// 2. 關閉視窗並清空輸入框
 function closeAddModal() {
     document.getElementById('add-modal').style.display = 'none';
     document.getElementById('add-link-form').reset();
 }
 
-// 5. 解析最終選擇並送出到後端
 async function submitNewLink(event) {
     event.preventDefault();
 
@@ -532,7 +654,6 @@ async function submitNewLink(event) {
     const categoryId = parseInt(catSelect.value);
     let subcategoryId = null;
 
-    // 只要不是 DIRECT (直接放入) 或 ADD_NEW_SUB，就代表選了一個真實的小分類 ID
     if (subSelect.value !== "DIRECT" && subSelect.value !== "ADD_NEW_SUB" && subSelect.value !== "") {
         subcategoryId = parseInt(subSelect.value);
     }
@@ -545,7 +666,7 @@ async function submitNewLink(event) {
                 title: title,
                 url: url,
                 source: source,
-                image_url: currentPreviewImage, // 🌟 關鍵發送：把剛才存起來的圖片網址一起送出去
+                image_url: currentPreviewImage, 
                 category_id: categoryId,
                 subcategory_id: subcategoryId
             })
@@ -563,9 +684,7 @@ async function submitNewLink(event) {
 }
 
 // ================= 刪除連結功能 =================
-// 🌟 接收按鈕元素，用動畫方式移除，不再重整頁面
 async function deleteLink(linkId, btnElement) {
-    // 加入原生確認視窗，避免誤觸
     if (!confirm("確定要刪除這個收藏嗎？")) return;
 
     try {
@@ -574,15 +693,12 @@ async function deleteLink(linkId, btnElement) {
         });
 
         if (response.ok) {
-            // 找到該按鈕所在的整張卡片外層容器
             const card = btnElement.closest('.swipe-container');
 
-            // 加上過場動畫，平滑縮小、淡出
             card.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
             card.style.opacity = '0';
             card.style.transform = 'translateX(-30px)';
 
-            // 等待動畫跑完後再從 DOM 中移除
             setTimeout(() => {
                 card.remove();
             }, 300);
@@ -604,16 +720,14 @@ function enableDragScroll() {
         let isDown = false;
         let startX;
         let scrollLeft;
-        let isDragging = false; // 新增：用來區分「點擊」和「拖曳」
+        let isDragging = false; 
 
         const closeOtherSliders = () => {
             sliders.forEach(other => {
-                // 如果是別人，而且它的 scrollLeft 大於 0 (代表被拉開了)
                 if (other !== slider && other.scrollLeft > 0) {
-                    other.style.scrollBehavior = 'smooth'; // 開啟平滑動畫
-                    other.scrollLeft = 0; // 強制縮回去
+                    other.style.scrollBehavior = 'smooth'; 
+                    other.scrollLeft = 0; 
 
-                    // 等待 300 毫秒動畫跑完，再把原生的吸附功能加回來
                     setTimeout(() => {
                         other.style.scrollSnapType = 'x mandatory';
                     }, 300);
@@ -622,12 +736,13 @@ function enableDragScroll() {
         };
 
         slider.addEventListener('mousedown', (e) => {
-            closeOtherSliders(); // 開始拖曳前先關掉其他可能打開的滑動選單
+            closeOtherSliders(); 
             isDown = true;
-            isDragging = false; // 每次按下都重置為非拖曳狀態
-            slider.style.scrollSnapType = 'none'; // 拖曳時暫時關閉 scroll-snap，手感更跟手
-            slider.style.scrollBehavior = 'auto'; // 拖曳時暫時關閉平滑滾動，手感更跟手
+            isDragging = false; 
+            slider.style.scrollSnapType = 'none'; 
+            slider.style.scrollBehavior = 'auto'; 
             startX = e.pageX - slider.offsetLeft;
+            slider.scrollLeft;
             scrollLeft = slider.scrollLeft;
         });
 
@@ -636,21 +751,21 @@ function enableDragScroll() {
         }, { passive: true });
 
         slider.addEventListener('mouseleave', () => {
-            if (isDown) smoothSnap(slider); // 如果滑鼠離開容器，且正在拖曳，則啟動平滑吸附
+            if (isDown) smoothSnap(slider); 
             isDown = false;
         });
 
         slider.addEventListener('mouseup', () => {
-            if (isDown) smoothSnap(slider); // 如果滑鼠離開容器，且正在拖曳，則啟動平滑吸附
+            if (isDown) smoothSnap(slider); 
             isDown = false;
         });
 
         slider.addEventListener('mousemove', (e) => {
             if (!isDown) return;
-            e.preventDefault(); // 阻止預設的文字選取行為
+            e.preventDefault(); 
             const x = e.pageX - slider.offsetLeft;
             const walk = (x - startX);
-            if (Math.abs(walk) > 5) { // 如果移動超過 5px，就認定為拖曳行為
+            if (Math.abs(walk) > 5) { 
                 isDragging = true;
             }
             slider.scrollLeft = scrollLeft - walk;
@@ -659,7 +774,6 @@ function enableDragScroll() {
         const link = slider.querySelector('a.swipe-content');
         if (link) {
             link.addEventListener('click', (e) => {
-                // 如果剛剛發生過拖曳，阻斷超連結跳轉，避免誤觸
                 if (isDragging) {
                     e.preventDefault();
                 }
@@ -667,36 +781,28 @@ function enableDragScroll() {
         }
     });
 
-    // 負責處理「放開滑鼠後」的動畫邏輯
     function smoothSnap(slider) {
-        slider.style.scrollBehavior = 'smooth'; // 開啟平滑滾動模式
+        slider.style.scrollBehavior = 'smooth'; 
 
-        // 如果使用者往左滑超過 40px (按鈕寬度的一半)，就自動滑開到底
         if (slider.scrollLeft > 40) {
             slider.scrollLeft = 80;
         } else {
-            // 否則就自動縮回去
             slider.scrollLeft = 0;
         }
 
-        // 等 300 毫秒動畫跑完後，再把原生的吸附功能加回來 (防呆)
         setTimeout(() => {
             slider.style.scrollSnapType = 'x mandatory';
         }, 300);
     }
 }
 
-// 🌟 新增：重置所有卡片滑動狀態的專屬小幫手
 function resetAllSwipes() {
     const sliders = document.querySelectorAll('.swipe-container');
     sliders.forEach(slider => {
-        // 如果卡片是被打開的狀態
         if (slider.scrollLeft > 0) {
-            // 暫時關閉平滑動畫，讓它「瞬間」縮回去，這樣切換回來才不會看到縮回去的殘影
             slider.style.scrollBehavior = 'auto';
             slider.scrollLeft = 0;
 
-            // 縮回去之後，再把平滑滾動的設定加回來
             setTimeout(() => {
                 slider.style.scrollBehavior = 'smooth';
             }, 50);
@@ -706,7 +812,6 @@ function resetAllSwipes() {
 
 // ================= 分類管理系統 =================
 
-// 1. 打開管理視窗並載入資料
 async function openCategoryModal() {
     document.getElementById('category-modal').style.display = 'flex';
     await renderCategoryEditList();
@@ -714,11 +819,9 @@ async function openCategoryModal() {
 
 function closeCategoryModal() {
     document.getElementById('category-modal').style.display = 'none';
-    // 關閉時順便重整主畫面的資料，確保最新
     fetchAndRenderApp();
 }
 
-// 2. 渲染管理清單
 async function renderCategoryEditList() {
     const listContainer = document.getElementById('category-edit-list');
     listContainer.innerHTML = '<p style="text-align: center;">載入中...</p>';
@@ -734,7 +837,6 @@ async function renderCategoryEditList() {
 
         let html = '';
         categories.forEach(cat => {
-
             const catName = cat.name || cat.categoryName || "未命名大分類";
 
             html += `
@@ -746,7 +848,6 @@ async function renderCategoryEditList() {
                         <button class="delete-action-btn" onclick="deleteCategoryItem('category', ${cat.id})">刪除</button>
                     </div>
                 </div>
-                
                 <div class="sub-edit-list">
             `;
 
@@ -764,7 +865,6 @@ async function renderCategoryEditList() {
                 });
             }
 
-            // 在每個小分類清單的最下方，加上「新增小分類」的快速按鈕
             html += `
                     <div style="margin-top: 10px; display: flex; gap: 8px;">
                         <input type="text" id="new-sub-input-${cat.id}" placeholder="新增小分類..." style="flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #ddd;">
@@ -783,7 +883,6 @@ async function renderCategoryEditList() {
     }
 }
 
-// 3. 呼叫 API：新增大分類
 async function submitNewCategory() {
     const inputEl = document.getElementById('new-category-input');
     const name = inputEl.value.trim();
@@ -795,10 +894,9 @@ async function submitNewCategory() {
         body: JSON.stringify({ name: name })
     });
     inputEl.value = '';
-    renderCategoryEditList(); // 重新整理清單
+    renderCategoryEditList(); 
 }
 
-// 4. 呼叫 API：新增小分類
 async function submitNewSubcategory(categoryId) {
     const inputEl = document.getElementById(`new-sub-input-${categoryId}`);
     const name = inputEl.value.trim();
@@ -812,7 +910,6 @@ async function submitNewSubcategory(categoryId) {
     renderCategoryEditList();
 }
 
-// 5. 呼叫 API：重新命名 (利用原生 prompt 對話框最輕量)
 async function renameItem(type, id, oldName) {
     const newName = prompt("請輸入新的名稱：", oldName);
     if (!newName || newName === oldName) return;
@@ -825,7 +922,6 @@ async function renameItem(type, id, oldName) {
     renderCategoryEditList();
 }
 
-// 6. 呼叫 API：刪除分類
 async function deleteCategoryItem(type, id) {
     const msg = type === 'category' ? "⚠️ 警告：這將會刪除該分類下的「所有小分類與連結」！確定嗎？" : "確定要刪除這個小分類嗎？";
     if (!confirm(msg)) return;
