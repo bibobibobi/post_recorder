@@ -1,10 +1,14 @@
 // ================= 全域變數與 WebSocket 初始化 =================
 let currentGroupId = null;
 
-// 🌟 新增：打開收音機，連線到後端電台
+// 🌟 新增：UI 狀態記憶區 (用來記住目前展開的分類與標籤)
+let openCategoryName = null;
+let activeFilterSubId = 'all';
+
+// 打開收音機，連線到後端電台
 const socket = io('http://127.0.0.1:5002');
 
-// 🌟 新增：設定頻道監聽器。當聽到 'workspace_updated' 廣播時，自動重整畫面
+// 設定頻道監聽器。當聽到 'workspace_updated' 廣播時，自動重整畫面
 socket.on('workspace_updated', () => {
     console.log("📡 收到即時更新廣播！正在自動重整畫面...");
     if (typeof fetchAndRenderApp === 'function') {
@@ -12,7 +16,7 @@ socket.on('workspace_updated', () => {
     }
 });
 
-// 🌟 新增：網頁載入時的第一道檢查關卡 (攔截邀請碼)
+// 網頁載入時的第一道檢查關卡 (攔截邀請碼)
 window.addEventListener('DOMContentLoaded', () => {
     // 解析目前網址的參數
     const urlParams = new URLSearchParams(window.location.search);
@@ -24,7 +28,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// 🌟 新增：透過邀請碼加入群組的函式
+// 透過邀請碼加入群組的函式
 async function joinGroupByToken(token) {
     const username = localStorage.getItem('saved_username');
     if (!username) {
@@ -45,9 +49,7 @@ async function joinGroupByToken(token) {
         const data = await response.json();
         if (response.ok) {
             alert(data.message);
-            // 加入成功後，把網址上的 token 擦掉，讓網址恢復乾淨
             window.history.replaceState({}, document.title, window.location.pathname);
-            // 重新載入群組清單與畫面
             await loadMyGroups();
             fetchAndRenderApp();
         } else {
@@ -73,7 +75,7 @@ async function loadMyGroups() {
 
         const select = document.getElementById('group-select');
         if (!select) return;
-        select.innerHTML = ''; // 清空舊選項
+        select.innerHTML = '';
 
         groups.forEach(group => {
             const option = document.createElement('option');
@@ -84,7 +86,6 @@ async function loadMyGroups() {
             select.appendChild(option);
         });
 
-        // 🌟 修改：預設選擇邏輯，並通知後端加入廣播房間
         if (!currentGroupId && groups.length > 0) {
             currentGroupId = groups[0].id;
             socket.emit('join_workspace', { group_id: currentGroupId });
@@ -102,14 +103,16 @@ async function loadMyGroups() {
 
 // 2. 切換群組
 function switchGroup(groupId) {
-    // 🌟 新增：先離開舊的廣播房間
+    // 🌟 清空 UI 記憶：因為切換群組了，舊的分類不存在，必須強制收合
+    openCategoryName = null;
+    activeFilterSubId = 'all';
+
     if (currentGroupId) {
         socket.emit('leave_workspace', { group_id: currentGroupId });
     }
 
     currentGroupId = groupId;
 
-    // 🌟 新增：加入新的廣播房間
     if (currentGroupId) {
         socket.emit('join_workspace', { group_id: currentGroupId });
     }
@@ -134,7 +137,6 @@ function updateInviteButtonVisibility() {
     const isPersonal = selectedOption.dataset.isPersonal === 'true';
     const role = selectedOption.dataset.role;
 
-    // 只有「非空間群組」且身分是管理員才能看到按鈕
     if (!isPersonal && role === 'owner') {
         btnInvite.style.display = 'inline-block';
     } else {
@@ -161,7 +163,7 @@ async function createNewGroup() {
         const data = await response.json();
         if (response.ok) {
             alert('群組建立成功！');
-            currentGroupId = data.group_id; // 跳轉到新群組
+            currentGroupId = data.group_id;
             await loadMyGroups();
             switchGroup(currentGroupId);
         } else {
@@ -304,11 +306,15 @@ async function handleSubmit() {
 
 function handleLogout() {
     localStorage.removeItem('saved_username');
-    // 登出時清空群組記憶，並離開房間
     if (currentGroupId) {
         socket.emit('leave_workspace', { group_id: currentGroupId });
     }
+
+    // 🌟 清空 UI 記憶：因為登出了，徹底洗掉記憶
+    openCategoryName = null;
+    activeFilterSubId = 'all';
     currentGroupId = null;
+
     const groupPanel = document.getElementById('group-workspace-panel');
     if (groupPanel) groupPanel.style.display = 'none';
 
@@ -325,7 +331,6 @@ function handleLogout() {
     }
 }
 
-// 3. 控制畫面切換，並啟動抓取資料
 async function showAppView(username) {
     document.getElementById('login-section').style.display = 'none';
     document.getElementById('main-app-section').style.display = 'block';
@@ -428,6 +433,40 @@ async function fetchAndRenderApp() {
         });
 
         appContent.innerHTML = htmlContent;
+
+        // 🌟 核心魔法：畫面重新產生後，自動恢復使用者的展開與標籤狀態
+        if (openCategoryName) {
+            const allHeaders = document.querySelectorAll('.accordion-header');
+            allHeaders.forEach(header => {
+                const currentCatName = header.querySelector('span').innerText;
+                if (currentCatName === openCategoryName) {
+                    const content = header.nextElementSibling;
+                    const arrow = header.querySelector('.arrow-icon');
+
+                    // 自動展開對應的分類
+                    content.style.display = 'block';
+                    arrow.style.transform = 'rotate(180deg)';
+
+                    // 如果使用者之前有選擇特定標籤，自動幫他點擊該標籤
+                    if (activeFilterSubId !== 'all') {
+                        const chips = content.querySelectorAll('.filter-chip');
+                        let chipFound = false;
+                        chips.forEach(chip => {
+                            // 比對 onclick 事件裡面的參數
+                            if (chip.getAttribute('onclick').includes(`'${activeFilterSubId}'`)) {
+                                chipFound = true;
+                                filterLinks(chip, activeFilterSubId);
+                            }
+                        });
+                        // 如果因為小分類被刪除等原因找不到該標籤了，就退回 'all'
+                        if (!chipFound) {
+                            activeFilterSubId = 'all';
+                        }
+                    }
+                }
+            });
+        }
+
         enableDragScroll();
 
     } catch (error) {
@@ -462,6 +501,9 @@ function generateLinkCard(link, subName, subId) {
 }
 
 function filterLinks(clickedChip, targetSubId) {
+    // 🌟 更新大腦記憶：記住目前點擊的標籤
+    activeFilterSubId = targetSubId;
+
     const container = clickedChip.parentElement;
     container.querySelectorAll('.filter-chip').forEach(chip => chip.classList.remove('active'));
     clickedChip.classList.add('active');
@@ -486,6 +528,7 @@ function filterLinks(clickedChip, targetSubId) {
 function toggleAccordion(clickedHeader) {
     const content = clickedHeader.nextElementSibling;
     const arrow = clickedHeader.querySelector('.arrow-icon');
+    const catName = clickedHeader.querySelector('span').innerText;
 
     resetAllSwipes();
 
@@ -500,9 +543,15 @@ function toggleAccordion(clickedHeader) {
     if (content.style.display === 'block') {
         content.style.display = 'none';
         arrow.style.transform = 'rotate(0deg)';
+        // 🌟 更新大腦記憶：收合時清空記憶
+        openCategoryName = null;
     } else {
         content.style.display = 'block';
         arrow.style.transform = 'rotate(180deg)';
+        // 🌟 更新大腦記憶：展開時記住分類名稱
+        openCategoryName = catName;
+        // 切換分類時，把標籤預設歸零，避免視覺錯亂
+        activeFilterSubId = 'all';
     }
 }
 
@@ -696,6 +745,15 @@ async function submitNewLink(event) {
         });
 
         if (response.ok) {
+            // 🌟 自動切換展開剛剛新增的大分類與標籤，讓視覺停留在對的地方
+            const selectedCatName = catSelect.options[catSelect.selectedIndex].text.replace('📁 ', '');
+            openCategoryName = `📁 ${selectedCatName}`;
+            if (subcategoryId) {
+                activeFilterSubId = String(subcategoryId);
+            } else {
+                activeFilterSubId = 'none';
+            }
+
             closeAddModal();
             fetchAndRenderApp();
         } else {
@@ -954,5 +1012,12 @@ async function deleteCategoryItem(type, id) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type, id })
     });
+
+    // 如果刪除的是大分類，清空記憶以防系統去找不存在的標籤
+    if (type === 'category') {
+        openCategoryName = null;
+        activeFilterSubId = 'all';
+    }
+
     renderCategoryEditList();
 }
