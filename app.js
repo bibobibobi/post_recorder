@@ -1,12 +1,23 @@
-// 🌟 新增：全域變數，用來記憶目前所在的群組 ID
+// ================= 全域變數與 WebSocket 初始化 =================
 let currentGroupId = null;
+
+// 🌟 新增：打開收音機，連線到後端電台
+const socket = io('http://127.0.0.1:5002');
+
+// 🌟 新增：設定頻道監聽器。當聽到 'workspace_updated' 廣播時，自動重整畫面
+socket.on('workspace_updated', () => {
+    console.log("📡 收到即時更新廣播！正在自動重整畫面...");
+    if (typeof fetchAndRenderApp === 'function') {
+        fetchAndRenderApp();
+    }
+});
 
 // 🌟 新增：網頁載入時的第一道檢查關卡 (攔截邀請碼)
 window.addEventListener('DOMContentLoaded', () => {
     // 解析目前網址的參數
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token');
-    
+
     if (token) {
         // 如果發現有 token，就觸發加入群組的動作
         joinGroupByToken(token);
@@ -15,10 +26,10 @@ window.addEventListener('DOMContentLoaded', () => {
 
 // 🌟 新增：透過邀請碼加入群組的函式
 async function joinGroupByToken(token) {
-    const username = localStorage.getItem('saved_username'); // 修改：配合你原本的鍵名 saved_username
+    const username = localStorage.getItem('saved_username');
     if (!username) {
         alert('請先登入或註冊！登入後再點擊一次邀請連結即可加入。');
-        return; 
+        return;
     }
 
     try {
@@ -26,11 +37,11 @@ async function joinGroupByToken(token) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-Username': username 
+                'X-Username': username
             },
             body: JSON.stringify({ token: token })
         });
-        
+
         const data = await response.json();
         if (response.ok) {
             alert(data.message);
@@ -51,7 +62,7 @@ async function joinGroupByToken(token) {
 
 // 1. 載入使用者的群組清單
 async function loadMyGroups() {
-    const username = localStorage.getItem('saved_username'); // 修改：配合你原本的鍵名 saved_username
+    const username = localStorage.getItem('saved_username');
     if (!username) return;
 
     try {
@@ -73,11 +84,13 @@ async function loadMyGroups() {
             select.appendChild(option);
         });
 
-        // 預設選擇邏輯
+        // 🌟 修改：預設選擇邏輯，並通知後端加入廣播房間
         if (!currentGroupId && groups.length > 0) {
             currentGroupId = groups[0].id;
+            socket.emit('join_workspace', { group_id: currentGroupId });
         } else if (currentGroupId) {
             select.value = currentGroupId;
+            socket.emit('join_workspace', { group_id: currentGroupId });
         }
 
         updateInviteButtonVisibility();
@@ -89,12 +102,22 @@ async function loadMyGroups() {
 
 // 2. 切換群組
 function switchGroup(groupId) {
+    // 🌟 新增：先離開舊的廣播房間
+    if (currentGroupId) {
+        socket.emit('leave_workspace', { group_id: currentGroupId });
+    }
+
     currentGroupId = groupId;
+
+    // 🌟 新增：加入新的廣播房間
+    if (currentGroupId) {
+        socket.emit('join_workspace', { group_id: currentGroupId });
+    }
+
     updateInviteButtonVisibility();
 
-    // 🌟 修改：切換群組時，呼叫你原本負責刷新畫面的 fetchAndRenderApp()
     if (typeof fetchAndRenderApp === 'function') {
-        fetchAndRenderApp(); 
+        fetchAndRenderApp();
     }
 }
 
@@ -102,7 +125,7 @@ function switchGroup(groupId) {
 function updateInviteButtonVisibility() {
     const select = document.getElementById('group-select');
     if (!select || select.options.length === 0) return;
-    
+
     const selectedOption = select.options[select.selectedIndex];
     const btnInvite = document.getElementById('btn-invite');
 
@@ -124,7 +147,7 @@ async function createNewGroup() {
     const groupName = prompt('請輸入新群組的名稱 (例如：期末報告專案)：');
     if (!groupName) return;
 
-    const username = localStorage.getItem('saved_username'); // 修改：配合你原本的鍵名 saved_username
+    const username = localStorage.getItem('saved_username');
     try {
         const response = await fetch('http://127.0.0.1:5002/api/groups', {
             method: 'POST',
@@ -139,8 +162,8 @@ async function createNewGroup() {
         if (response.ok) {
             alert('群組建立成功！');
             currentGroupId = data.group_id; // 跳轉到新群組
-            await loadMyGroups(); 
-            switchGroup(currentGroupId); 
+            await loadMyGroups();
+            switchGroup(currentGroupId);
         } else {
             alert(data.error);
         }
@@ -151,7 +174,7 @@ async function createNewGroup() {
 
 // 4. 產生邀請連結
 async function generateInviteLink() {
-    const username = localStorage.getItem('saved_username'); // 修改：配合你原本的鍵名 saved_username
+    const username = localStorage.getItem('saved_username');
     if (!currentGroupId) return;
 
     try {
@@ -163,7 +186,7 @@ async function generateInviteLink() {
         const data = await response.json();
         if (response.ok) {
             const inviteUrl = `${window.location.origin}${window.location.pathname}?token=${data.invite_token}`;
-            
+
             navigator.clipboard.writeText(inviteUrl).then(() => {
                 alert(`✅ 邀請連結已複製到剪貼簿！\n\n您可以直接貼上傳給朋友了：\n${inviteUrl}`);
             }).catch(err => {
@@ -192,7 +215,6 @@ window.fetch = async function (resource, config) {
         config.headers['X-Username'] = username;
     }
 
-    // 🌟 新增：利用攔截器特性，自動為除了登入註冊以外的所有 API 請求塞入群組 ID
     if (currentGroupId) {
         config.headers['X-Group-Id'] = currentGroupId;
     }
@@ -269,7 +291,7 @@ async function handleSubmit() {
             } else {
                 alert("🎉 帳號建立成功！請使用新帳號登入。");
                 toggleAuthMode();
-                document.getElementById('password-input').value = ''; 
+                document.getElementById('password-input').value = '';
             }
         } else {
             messageEl.textContent = result.error || "發生未知錯誤";
@@ -282,7 +304,10 @@ async function handleSubmit() {
 
 function handleLogout() {
     localStorage.removeItem('saved_username');
-    // 🌟 新增：登出時清空群組記憶，並將面板重新隱藏
+    // 登出時清空群組記憶，並離開房間
+    if (currentGroupId) {
+        socket.emit('leave_workspace', { group_id: currentGroupId });
+    }
     currentGroupId = null;
     const groupPanel = document.getElementById('group-workspace-panel');
     if (groupPanel) groupPanel.style.display = 'none';
@@ -296,7 +321,7 @@ function handleLogout() {
     document.getElementById('app-content').innerHTML = '';
 
     if (!isLoginMode) {
-        toggleAuthMode(); 
+        toggleAuthMode();
     }
 }
 
@@ -305,13 +330,11 @@ async function showAppView(username) {
     document.getElementById('login-section').style.display = 'none';
     document.getElementById('main-app-section').style.display = 'block';
 
-    // 🌟 新增：登入成功進入主畫面時，將群組控制面板顯示出來
     const groupPanel = document.getElementById('group-workspace-panel');
     if (groupPanel) groupPanel.style.display = 'block';
 
     document.getElementById('user-display-name').textContent = username;
 
-    // 🌟 修改：先載入群組清單（建立下拉選單數據），再開始抓資料渲染畫面
     await loadMyGroups();
     fetchAndRenderApp();
 }
@@ -367,7 +390,7 @@ async function fetchAndRenderApp() {
 
             if (validSubs.length > 0) {
                 chipsHtml += `<div class="filter-chips-container">`;
-                chipsHtml += `<div class="filter-chip active" onclick="filterLinks(this, 'all')">全部</div>`; 
+                chipsHtml += `<div class="filter-chip active" onclick="filterLinks(this, 'all')">全部</div>`;
 
                 if (cat.links && cat.links.length > 0) {
                     chipsHtml += `<div class="filter-chip" onclick="filterLinks(this, 'none')">📌 直屬連結</div>`;
@@ -401,11 +424,11 @@ async function fetchAndRenderApp() {
                 htmlContent += `<p style="color: #8e8e93; font-size: 14px; text-align: center; margin: 10px 0;">此分類尚無內容</p>`;
             }
 
-            htmlContent += `</div>`; 
+            htmlContent += `</div>`;
         });
 
         appContent.innerHTML = htmlContent;
-        enableDragScroll(); 
+        enableDragScroll();
 
     } catch (error) {
         console.error("載入失敗：", error);
@@ -447,14 +470,14 @@ function filterLinks(clickedChip, targetSubId) {
     const cards = wrapper.querySelectorAll('.filterable-card');
 
     cards.forEach(card => {
-        card.scrollLeft = 0; 
+        card.scrollLeft = 0;
         if (targetSubId === 'all') {
             card.style.display = 'flex';
         } else {
             if (card.getAttribute('data-sub-id') === String(targetSubId)) {
                 card.style.display = 'flex';
             } else {
-                card.style.display = 'none'; 
+                card.style.display = 'none';
             }
         }
     });
@@ -464,7 +487,7 @@ function toggleAccordion(clickedHeader) {
     const content = clickedHeader.nextElementSibling;
     const arrow = clickedHeader.querySelector('.arrow-icon');
 
-    resetAllSwipes(); 
+    resetAllSwipes();
 
     const allHeaders = document.querySelectorAll('.accordion-header');
     allHeaders.forEach(header => {
@@ -517,7 +540,7 @@ async function fetchUrlPreview() {
     } catch (error) {
         console.error("解析失敗：", error);
     } finally {
-        titleInput.placeholder = originalPlaceholder; 
+        titleInput.placeholder = originalPlaceholder;
     }
 }
 
@@ -531,7 +554,7 @@ document.addEventListener('DOMContentLoaded', () => {
 async function openAddModal() {
     document.getElementById('add-modal').style.display = 'flex';
     document.getElementById('add-link-form').reset();
-    currentPreviewImage = ''; 
+    currentPreviewImage = '';
     await refreshCategorySelects();
 }
 
@@ -570,7 +593,7 @@ async function handleCategoryChange(autoSelectSubId = null) {
     const catId = catSelect.value;
 
     if (catId === "ADD_NEW_CAT") {
-        catSelect.value = ""; 
+        catSelect.value = "";
         const name = prompt("請輸入新的「大分類」名稱：");
         if (!name) return;
 
@@ -583,7 +606,7 @@ async function handleCategoryChange(autoSelectSubId = null) {
 
         if (res.ok) {
             await refreshCategorySelects(data.id);
-            fetchAndRenderApp(); 
+            fetchAndRenderApp();
         }
         return;
     }
@@ -613,7 +636,7 @@ async function handleSubcategoryChange() {
     const subSelect = document.getElementById('new-subcategory-select');
 
     if (subSelect.value === "ADD_NEW_SUB") {
-        subSelect.value = "DIRECT"; 
+        subSelect.value = "DIRECT";
         const name = prompt("請輸入新的「小分類」名稱：");
         if (!name) return;
 
@@ -666,7 +689,7 @@ async function submitNewLink(event) {
                 title: title,
                 url: url,
                 source: source,
-                image_url: currentPreviewImage, 
+                image_url: currentPreviewImage,
                 category_id: categoryId,
                 subcategory_id: subcategoryId
             })
@@ -720,13 +743,13 @@ function enableDragScroll() {
         let isDown = false;
         let startX;
         let scrollLeft;
-        let isDragging = false; 
+        let isDragging = false;
 
         const closeOtherSliders = () => {
             sliders.forEach(other => {
                 if (other !== slider && other.scrollLeft > 0) {
-                    other.style.scrollBehavior = 'smooth'; 
-                    other.scrollLeft = 0; 
+                    other.style.scrollBehavior = 'smooth';
+                    other.scrollLeft = 0;
 
                     setTimeout(() => {
                         other.style.scrollSnapType = 'x mandatory';
@@ -736,11 +759,11 @@ function enableDragScroll() {
         };
 
         slider.addEventListener('mousedown', (e) => {
-            closeOtherSliders(); 
+            closeOtherSliders();
             isDown = true;
-            isDragging = false; 
-            slider.style.scrollSnapType = 'none'; 
-            slider.style.scrollBehavior = 'auto'; 
+            isDragging = false;
+            slider.style.scrollSnapType = 'none';
+            slider.style.scrollBehavior = 'auto';
             startX = e.pageX - slider.offsetLeft;
             slider.scrollLeft;
             scrollLeft = slider.scrollLeft;
@@ -751,21 +774,21 @@ function enableDragScroll() {
         }, { passive: true });
 
         slider.addEventListener('mouseleave', () => {
-            if (isDown) smoothSnap(slider); 
+            if (isDown) smoothSnap(slider);
             isDown = false;
         });
 
         slider.addEventListener('mouseup', () => {
-            if (isDown) smoothSnap(slider); 
+            if (isDown) smoothSnap(slider);
             isDown = false;
         });
 
         slider.addEventListener('mousemove', (e) => {
             if (!isDown) return;
-            e.preventDefault(); 
+            e.preventDefault();
             const x = e.pageX - slider.offsetLeft;
             const walk = (x - startX);
-            if (Math.abs(walk) > 5) { 
+            if (Math.abs(walk) > 5) {
                 isDragging = true;
             }
             slider.scrollLeft = scrollLeft - walk;
@@ -782,7 +805,7 @@ function enableDragScroll() {
     });
 
     function smoothSnap(slider) {
-        slider.style.scrollBehavior = 'smooth'; 
+        slider.style.scrollBehavior = 'smooth';
 
         if (slider.scrollLeft > 40) {
             slider.scrollLeft = 80;
@@ -894,7 +917,7 @@ async function submitNewCategory() {
         body: JSON.stringify({ name: name })
     });
     inputEl.value = '';
-    renderCategoryEditList(); 
+    renderCategoryEditList();
 }
 
 async function submitNewSubcategory(categoryId) {
