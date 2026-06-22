@@ -193,6 +193,11 @@ async function generateInviteLink() {
 // ================= 全域 API 攔截器 (自動夾帶通行證) =================
 const originalFetch = window.fetch;
 window.fetch = async function (resource, config) {
+    // 核心邏輯：動態將固定的 localhost 網址替換為目前瀏覽器的實際網域，自動適應本地端與雲端環境
+    if (typeof resource === 'string' && resource.includes('127.0.0.1:5002')) {
+        resource = resource.replace('http://127.0.0.1:5002', window.location.origin);
+    }
+
     if (typeof resource === 'string' && (resource.includes('/api/login') || resource.includes('/api/register'))) {
         return originalFetch(resource, config);
     }
