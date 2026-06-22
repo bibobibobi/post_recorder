@@ -16,18 +16,6 @@ socket.on('workspace_updated', () => {
     }
 });
 
-// 網頁載入時的第一道檢查關卡 (攔截邀請碼)
-window.addEventListener('DOMContentLoaded', () => {
-    // 解析目前網址的參數
-    const urlParams = new URLSearchParams(window.location.search);
-    const token = urlParams.get('token');
-
-    if (token) {
-        // 如果發現有 token，就觸發加入群組的動作
-        joinGroupByToken(token);
-    }
-});
-
 // 透過邀請碼加入群組的函式
 async function joinGroupByToken(token) {
     const username = localStorage.getItem('saved_username');
@@ -338,17 +326,6 @@ async function showAppView(username) {
     fetchAndRenderApp();
 }
 
-// ================= 初始化檢查 =================
-
-document.addEventListener('DOMContentLoaded', () => {
-    const savedUser = localStorage.getItem('saved_username');
-
-    if (savedUser) {
-        showAppView(savedUser);
-    }
-});
-
-
 // ================= 抓取與渲染首頁 (手風琴 + 標籤篩選版) =================
 async function fetchAndRenderApp() {
     const appContent = document.getElementById('app-content');
@@ -555,6 +532,29 @@ function toggleAccordion(clickedHeader) {
 let cachedCategoriesData = [];
 let currentPreviewImage = '';
 
+// ================= 自動辨識社群平台 =================
+function autoDetectPlatform(url) {
+    const sourceSelect = document.getElementById('new-source');
+    if (!sourceSelect || !url) return;
+
+    try {
+        // 利用瀏覽器內建的 URL 物件解析網域，並轉為小寫避免大小寫錯誤
+        const hostname = new URL(url).hostname.toLowerCase();
+
+        if (hostname.includes('threads.net') || hostname.includes('threads.com')) {
+            sourceSelect.value = 'Threads';
+        } else if (hostname.includes('instagram.com')) {
+            sourceSelect.value = 'Instagram';
+        } else if (hostname.includes('facebook.com')) {
+            sourceSelect.value = 'Facebook';
+        } else {
+            sourceSelect.value = '其他';
+        }
+    } catch (error) {
+        // 若輸入的不是標準網址（例如還在打字），就不做任何動作
+    }
+}
+
 async function fetchUrlPreview() {
     const urlInput = document.getElementById('new-url').value;
     const titleInput = document.getElementById('new-title');
@@ -586,13 +586,6 @@ async function fetchUrlPreview() {
         titleInput.placeholder = originalPlaceholder;
     }
 }
-
-document.addEventListener('DOMContentLoaded', () => {
-    const urlField = document.getElementById('new-url');
-    if (urlField) {
-        urlField.addEventListener('blur', fetchUrlPreview);
-    }
-});
 
 async function openAddModal() {
     document.getElementById('add-modal').style.display = 'flex';
@@ -1027,3 +1020,68 @@ function toggleSideMenu() {
         overlay.classList.toggle('active');
     }
 }
+
+// ================= 系統初始化大腦 (攔截邀請碼、登入、手機分享) =================
+window.addEventListener('DOMContentLoaded', async () => {
+    // 1. 綁定「手動輸入/貼上網址」時的自動辨識事件
+    const urlField = document.getElementById('new-url');
+    if (urlField) {
+        // 輸入時即時判斷平台
+        urlField.addEventListener('input', (e) => autoDetectPlatform(e.target.value));
+        // 離開焦點時觸發 AI 預覽抓取
+        urlField.addEventListener('blur', fetchUrlPreview);
+    }
+
+    // 2. 解析目前網址的參數
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+
+    // 如果有邀請碼，優先執行加入群組邏輯
+    if (token) {
+        joinGroupByToken(token);
+        return;
+    }
+
+    // 3. 檢查登入狀態
+    const savedUser = localStorage.getItem('saved_username');
+    if (savedUser) {
+        // 先顯示主畫面並載入群組與分類資料 (這步很重要，否則新增視窗的下拉選單會是空的)
+        await showAppView(savedUser);
+
+        // 4. 攔截手機 PWA 分享過來的資料 (Web Share Target)
+        const sharedTitle = urlParams.get('title');
+        const sharedText = urlParams.get('text');
+        const sharedUrl = urlParams.get('url');
+
+        // 核心魔法：使用正則表達式，從混亂的文字中萃取出純網址
+        let targetUrl = sharedUrl;
+        if (!targetUrl && sharedText) {
+            const urlMatch = sharedText.match(/https?:\/\/[^\s]+/);
+            if (urlMatch) {
+                targetUrl = urlMatch[0];
+            }
+        }
+
+        // 如果真的有收到分享的網址
+        if (targetUrl) {
+            // 把網址列的參數擦掉，讓網址恢復乾淨，避免重新整理時重複觸發
+            window.history.replaceState({}, document.title, window.location.pathname);
+
+            // 自動打開新增視窗
+            await openAddModal();
+
+            // 自動填寫資料
+            const urlInput = document.getElementById('new-url');
+            const titleInput = document.getElementById('new-title');
+
+            if (urlInput) urlInput.value = targetUrl;
+            if (titleInput && sharedTitle) titleInput.value = sharedTitle;
+
+            // 觸發自動辨識平台
+            autoDetectPlatform(targetUrl);
+
+            // 觸發後端爬蟲 / AI 摘要抓取
+            fetchUrlPreview();
+        }
+    }
+});
