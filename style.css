@@ -647,3 +647,159 @@ body {
     color: #8e8e93;
     font-size: 24px;
 }
+
+/* ================= 現代化行動端佈局 (漢堡選單 + FAB) ================= */
+
+/* 頂部排版優化 */
+.header-right-area {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.workspace-card {
+    background: #f2f2f7;
+    padding: 6px 12px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+}
+
+.modern-select {
+    border: none;
+    background: transparent;
+    font-size: 14px;
+    font-weight: 500;
+    color: #1c1c1e;
+    outline: none;
+    cursor: pointer;
+}
+
+/* 漢堡按鈕樣式 */
+.hamburger-btn {
+    background: transparent;
+    border: none;
+    font-size: 24px;
+    color: #1c1c1e;
+    cursor: pointer;
+    padding: 4px 8px;
+    transition: opacity 0.2s;
+}
+.hamburger-btn:hover {
+    opacity: 0.6;
+}
+
+/* --- 側邊隱藏選單本體 --- */
+.side-menu {
+    position: fixed;
+    top: 0;
+    right: -280px; /* 預設躲在右邊螢幕外面 */
+    width: 280px;
+    height: 100%;
+    background: #ffffff;
+    box-shadow: -4px 0 15px rgba(0, 0, 0, 0.1);
+    z-index: 2000; /* 確保在最上層 */
+    transition: right 0.3s ease; /* 核心魔法：滑入滑出的流暢動畫 */
+    display: flex;
+    flex-direction: column;
+}
+
+/* 當啟用時，右邊距歸零，選單就會滑進來 */
+.side-menu.active {
+    right: 0;
+}
+
+.side-menu-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    border-bottom: 1px solid #e5e5ea;
+}
+
+.close-menu-btn {
+    background: transparent;
+    border: none;
+    font-size: 18px;
+    color: #8e8e93;
+    cursor: pointer;
+}
+
+.side-menu-content {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* 選單內按鈕美化 */
+.menu-item-btn {
+    width: 100%;
+    text-align: left;
+    padding: 12px 16px;
+    border: none;
+    background: #f2f2f7;
+    color: #1c1c1e;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.menu-item-btn:hover {
+    background: #e5e5ea;
+}
+.menu-item-btn.logout-btn {
+    background: #ffe5e5;
+    color: #ff3b30;
+}
+.menu-item-btn.logout-btn:hover {
+    background: #ffd1d1;
+}
+
+/* 背景遮罩 */
+.menu-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.3);
+    z-index: 1999;
+    display: none; /* 預設隱藏 */
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+.menu-overlay.active {
+    display: block;
+    opacity: 1;
+}
+
+/* --- 右下角懸浮按鈕 (FAB) --- */
+.floating-action-btn {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 56px;
+    height: 56px;
+    background-color: #007aff;
+    color: white;
+    border: none;
+    border-radius: 50%; /* 完美的圓形 */
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(0, 122, 255, 0.4); /* 漂亮的藍色發光陰影 */
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s ease, background-color 0.2s;
+}
+.floating-action-btn:hover {
+    background-color: #005bb5;
+    transform: scale(1.05); /* 滑鼠懸停時微放大 */
+}
+.floating-action-btn:active {
+    transform: scale(0.95); /* 點擊時微縮小，增加按鈕回饋感 */
+}

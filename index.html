@@ -37,25 +37,33 @@
         <div class="app-header">
             <span>歡迎，<span id="user-display-name" style="font-weight: bold;"></span></span>
 
-            <div class="header-actions">
-                <button onclick="openAddModal()" class="header-btn primary-btn">新增</button>
-                <button onclick="handleLogout()" class="header-btn danger-btn">登出</button>
-                <button onclick="openCategoryModal()" class="header-btn"
-                    style="color: #1c1c1e; border: 1px solid #1c1c1e;">管理分類</button>
-            </div>
-            <div id="group-workspace-panel"
-                style="padding: 10px; background: #f8f9fa; border-radius: 8px; margin-bottom: 20px;">
-                <label for="group-select" style="font-weight: bold;">🗂️ 目前工作區：</label>
-                <select id="group-select" onchange="switchGroup(this.value)"
-                    style="padding: 5px; margin-right: 10px; border-radius: 4px;">
-                </select>
-
-                <button onclick="createNewGroup()" style="padding: 5px 10px; cursor: pointer;">➕ 建立群組</button>
-                <button id="btn-invite" onclick="generateInviteLink()"
-                    style="display: none; padding: 5px 10px; cursor: pointer; background-color: #007AFF; color: white; border: none; border-radius: 4px;">🔗
-                    產生邀請連結</button>
+            <div class="header-right-area">
+                <div id="group-workspace-panel" class="workspace-card">
+                    <select id="group-select" onchange="switchGroup(this.value)" class="modern-select">
+                    </select>
+                </div>
+                <button onclick="toggleSideMenu()" class="hamburger-btn">☰</button>
             </div>
         </div>
+
+        <div id="side-menu" class="side-menu">
+            <div class="side-menu-header">
+                <h3>功能選單</h3>
+                <button onclick="toggleSideMenu()" class="close-menu-btn">✕</button>
+            </div>
+            <div class="side-menu-content">
+                <button onclick="openCategoryModal(); toggleSideMenu();" class="menu-item-btn">🗂️ 分類管理</button>
+                <button onclick="createNewGroup(); toggleSideMenu();" class="menu-item-btn">➕ 建立群組</button>
+                <button id="btn-invite" onclick="generateInviteLink(); toggleSideMenu();"
+                    class="menu-item-btn invite-btn" style="display: none;">🔗 邀請連結</button>
+                <hr style="border: 0; border-top: 1px solid #e5e5ea; margin: 15px 0;">
+                <button onclick="handleLogout(); toggleSideMenu();" class="menu-item-btn logout-btn">🚪 登出帳號</button>
+            </div>
+        </div>
+
+        <div id="menu-overlay" class="menu-overlay" onclick="toggleSideMenu()"></div>
+
+        <button onclick="openAddModal()" class="floating-action-btn">＋</button>
     </div>
 
     <div id="app-content"></div>
@@ -114,7 +122,6 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
-
     <script src="app.js"></script>
 </body>
 

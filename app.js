@@ -6,7 +6,7 @@ let openCategoryName = null;
 let activeFilterSubId = 'all';
 
 // 打開收音機，連線到後端電台
-const socket = io('http://127.0.0.1:5002');
+const socket = io();
 
 // 設定頻道監聽器。當聽到 'workspace_updated' 廣播時，自動重整畫面
 socket.on('workspace_updated', () => {
@@ -315,9 +315,6 @@ function handleLogout() {
     activeFilterSubId = 'all';
     currentGroupId = null;
 
-    const groupPanel = document.getElementById('group-workspace-panel');
-    if (groupPanel) groupPanel.style.display = 'none';
-
     document.getElementById('main-app-section').style.display = 'none';
     document.getElementById('login-section').style.display = 'flex';
     document.getElementById('username-input').value = '';
@@ -334,9 +331,6 @@ function handleLogout() {
 async function showAppView(username) {
     document.getElementById('login-section').style.display = 'none';
     document.getElementById('main-app-section').style.display = 'block';
-
-    const groupPanel = document.getElementById('group-workspace-panel');
-    if (groupPanel) groupPanel.style.display = 'block';
 
     document.getElementById('user-display-name').textContent = username;
 
@@ -1020,4 +1014,16 @@ async function deleteCategoryItem(type, id) {
     }
 
     renderCategoryEditList();
+}
+
+// ================= 側邊選單開關控制 =================
+function toggleSideMenu() {
+    const menu = document.getElementById('side-menu');
+    const overlay = document.getElementById('menu-overlay');
+
+    if (menu && overlay) {
+        // toggle 代表：有這個 class 就拔掉，沒有就加上去
+        menu.classList.toggle('active');
+        overlay.classList.toggle('active');
+    }
 }
