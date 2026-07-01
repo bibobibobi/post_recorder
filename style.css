@@ -170,9 +170,22 @@ body {
 }
 
 .card-title {
-    font-size: 15px;
-    font-weight: 600;
-    line-height: 1.3;
+    font-size: 16px;
+    font-weight: bold;
+    color: #333;
+    margin-bottom: 6px;
+
+    /* 🌟 多行文字截斷魔法 */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    /* 限制最多顯示 2 行，你可以依喜好改成 1 或 3 */
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    /* 超過的地方顯示 ... */
+
+    /* 確保長串的英文網址或無意義字母也能強制換行，不會撐破版面 */
+    word-break: break-word;
 }
 
 .card-source {
@@ -601,6 +614,7 @@ body {
 .card-text-area {
     flex: 1;
     overflow: hidden;
+    min-width: 0;
     padding-right: 12px;
     /* 與右邊圖片保持距離 */
 }
@@ -685,6 +699,7 @@ body {
     padding: 4px 8px;
     transition: opacity 0.2s;
 }
+
 .hamburger-btn:hover {
     opacity: 0.6;
 }
@@ -693,13 +708,16 @@ body {
 .side-menu {
     position: fixed;
     top: 0;
-    right: -280px; /* 預設躲在右邊螢幕外面 */
+    right: -280px;
+    /* 預設躲在右邊螢幕外面 */
     width: 280px;
     height: 100%;
     background: #ffffff;
     box-shadow: -4px 0 15px rgba(0, 0, 0, 0.1);
-    z-index: 2000; /* 確保在最上層 */
-    transition: right 0.3s ease; /* 核心魔法：滑入滑出的流暢動畫 */
+    z-index: 2000;
+    /* 確保在最上層 */
+    transition: right 0.3s ease;
+    /* 核心魔法：滑入滑出的流暢動畫 */
     display: flex;
     flex-direction: column;
 }
@@ -746,13 +764,16 @@ body {
     cursor: pointer;
     transition: background 0.2s;
 }
+
 .menu-item-btn:hover {
     background: #e5e5ea;
 }
+
 .menu-item-btn.logout-btn {
     background: #ffe5e5;
     color: #ff3b30;
 }
+
 .menu-item-btn.logout-btn:hover {
     background: #ffd1d1;
 }
@@ -766,10 +787,12 @@ body {
     height: 100%;
     background: rgba(0, 0, 0, 0.3);
     z-index: 1999;
-    display: none; /* 預設隱藏 */
+    display: none;
+    /* 預設隱藏 */
     opacity: 0;
     transition: opacity 0.3s ease;
 }
+
 .menu-overlay.active {
     display: block;
     opacity: 1;
@@ -785,21 +808,27 @@ body {
     background-color: #007aff;
     color: white;
     border: none;
-    border-radius: 50%; /* 完美的圓形 */
+    border-radius: 50%;
+    /* 完美的圓形 */
     font-size: 28px;
     font-weight: bold;
     cursor: pointer;
-    box-shadow: 0 4px 16px rgba(0, 122, 255, 0.4); /* 漂亮的藍色發光陰影 */
+    box-shadow: 0 4px 16px rgba(0, 122, 255, 0.4);
+    /* 漂亮的藍色發光陰影 */
     z-index: 1000;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: transform 0.2s ease, background-color 0.2s;
 }
+
 .floating-action-btn:hover {
     background-color: #005bb5;
-    transform: scale(1.05); /* 滑鼠懸停時微放大 */
+    transform: scale(1.05);
+    /* 滑鼠懸停時微放大 */
 }
+
 .floating-action-btn:active {
-    transform: scale(0.95); /* 點擊時微縮小，增加按鈕回饋感 */
+    transform: scale(0.95);
+    /* 點擊時微縮小，增加按鈕回饋感 */
 }
