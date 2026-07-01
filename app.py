@@ -228,14 +228,26 @@ def get_url_preview():
         data = response.json()
         
         if data.get('status') == 'success':
-            # 提取標題與縮圖
-            title = data['data'].get('title', '未知網頁')
+            # 1. 把 Microlink 抓到的資料全部拿出來
+            raw_title = data['data'].get('title', '未知網頁')
+            description = data['data'].get('description', '')
             image_data = data['data'].get('image', {})
             image_url = image_data.get('url', '') if image_data else ''
-            
-            return jsonify({"title": title, "image": image_url}), 200
-        else:
-            return jsonify({"title": "無法取得標題", "image": ""}), 200
+
+            # 2. 🧹 標題清潔工：剪掉前面討厭的 0 或 0️⃣
+            clean_title = raw_title
+            if clean_title.startswith('0 '):
+                clean_title = clean_title[2:]
+            elif clean_title.startswith('0️⃣ '):
+                clean_title = clean_title[4:]
+
+            # 3. 🧠 移花接木術：如果是 Threads，就把描述 (description) 當作真正的標題
+            if 'threads' in target_url.lower():
+                if description:
+                    # 擷取前 40 個字，避免貼文太長把畫面撐爆，後面加上刪節號
+                    clean_title = description[:40] + "..." if len(description) > 40 else description
+
+            return jsonify({"title": clean_title, "image": image_url}), 200
 
     except Exception as e:
         print(f"❌ 預覽抓取錯誤: {e}")
