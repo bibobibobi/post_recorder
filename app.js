@@ -283,6 +283,12 @@ async function handleSubmit() {
             if (isLoginMode) {
                 localStorage.setItem('saved_username', result.username);
                 showAppView(result.username);
+
+                // 🌟 新增：登入成功後，檢查有沒有剛剛被卡在門外的分享網址
+                if (pendingSharedUrl) {
+                    // 等待一小段時間讓主畫面準備好，再彈出新增視窗
+                    setTimeout(() => triggerAutoAddModal(pendingSharedUrl, pendingSharedTitle), 500);
+                }
             } else {
                 alert("🎉 帳號建立成功！請使用新帳號登入。");
                 toggleAuthMode();
@@ -1027,13 +1033,16 @@ function toggleSideMenu() {
 }
 
 // ================= 系統初始化大腦 (攔截邀請碼、登入、手機分享) =================
+
+// 🌟 全域變數：用來暫存捷徑分享過來的網址，讓它能跨越登入畫面存活
+let pendingSharedUrl = null;
+let pendingSharedTitle = null;
+
 window.addEventListener('DOMContentLoaded', async () => {
     // 1. 綁定「手動輸入/貼上網址」時的自動辨識事件
     const urlField = document.getElementById('new-url');
     if (urlField) {
-        // 輸入時即時判斷平台
         urlField.addEventListener('input', (e) => autoDetectPlatform(e.target.value));
-        // 離開焦點時觸發 AI 預覽抓取
         urlField.addEventListener('blur', fetchUrlPreview);
     }
 
@@ -1047,46 +1056,52 @@ window.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
-    // 3. 檢查登入狀態
+    // 3. 攔截手機捷徑或 PWA 分享過來的資料
+    const sharedTitle = urlParams.get('title');
+    const sharedText = urlParams.get('text');
+    const sharedUrl = urlParams.get('url');
+
+    let targetUrl = sharedUrl;
+    if (!targetUrl && sharedText) {
+        const urlMatch = sharedText.match(/https?:\/\/[^\s]+/);
+        if (urlMatch) {
+            targetUrl = urlMatch[0];
+        }
+    }
+
+    // 如果真的有收到分享的網址，先把它存起來，並清理網址列
+    if (targetUrl) {
+        pendingSharedUrl = targetUrl;
+        pendingSharedTitle = sharedTitle;
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
+    // 4. 檢查登入狀態並決定後續動作
     const savedUser = localStorage.getItem('saved_username');
     if (savedUser) {
-        // 先顯示主畫面並載入群組與分類資料 (這步很重要，否則新增視窗的下拉選單會是空的)
+        // 如果已經登入（自動通關），先顯示主畫面
         await showAppView(savedUser);
 
-        // 4. 攔截手機 PWA 分享過來的資料 (Web Share Target)
-        const sharedTitle = urlParams.get('title');
-        const sharedText = urlParams.get('text');
-        const sharedUrl = urlParams.get('url');
-
-        // 核心魔法：使用正則表達式，從混亂的文字中萃取出純網址
-        let targetUrl = sharedUrl;
-        if (!targetUrl && sharedText) {
-            const urlMatch = sharedText.match(/https?:\/\/[^\s]+/);
-            if (urlMatch) {
-                targetUrl = urlMatch[0];
-            }
-        }
-
-        // 如果真的有收到分享的網址
-        if (targetUrl) {
-            // 把網址列的參數擦掉，讓網址恢復乾淨，避免重新整理時重複觸發
-            window.history.replaceState({}, document.title, window.location.pathname);
-
-            // 自動打開新增視窗
-            await openAddModal();
-
-            // 自動填寫資料
-            const urlInput = document.getElementById('new-url');
-            const titleInput = document.getElementById('new-title');
-
-            if (urlInput) urlInput.value = targetUrl;
-            if (titleInput && sharedTitle) titleInput.value = sharedTitle;
-
-            // 觸發自動辨識平台
-            autoDetectPlatform(targetUrl);
-
-            // 觸發後端爬蟲 / AI 摘要抓取
-            fetchUrlPreview();
+        // 如果有暫存的分享網址，就自動打開新增視窗幫他填好
+        if (pendingSharedUrl) {
+            triggerAutoAddModal(pendingSharedUrl, pendingSharedTitle);
         }
     }
 });
+
+// 🌟 獨立出一個自動處理分享網址的輔助函式，方便重複呼叫
+async function triggerAutoAddModal(url, title) {
+    await openAddModal();
+    const urlInput = document.getElementById('new-url');
+    const titleInput = document.getElementById('new-title');
+
+    if (urlInput) urlInput.value = url;
+    if (titleInput && title) titleInput.value = title;
+
+    autoDetectPlatform(url);
+    fetchUrlPreview();
+
+    // 填寫完畢後清空暫存，避免重複觸發
+    pendingSharedUrl = null;
+    pendingSharedTitle = null;
+}
