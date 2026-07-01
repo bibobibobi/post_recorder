@@ -1076,15 +1076,30 @@ window.addEventListener('DOMContentLoaded', async () => {
         window.history.replaceState({}, document.title, window.location.pathname);
     }
 
-    // 4. 檢查登入狀態並決定後續動作
+    // 4. 檢查登入狀態並進行後端驗證
     const savedUser = localStorage.getItem('saved_username');
     if (savedUser) {
-        // 如果已經登入（自動通關），先顯示主畫面
-        await showAppView(savedUser);
-
-        // 如果有暫存的分享網址，就自動打開新增視窗幫他填好
-        if (pendingSharedUrl) {
-            triggerAutoAddModal(pendingSharedUrl, pendingSharedTitle);
+        try {
+            // 拿著記憶中的帳號，向後端發送驗證請求
+            const response = await fetch('http://127.0.0.1:5002/api/auth/verify');
+            
+            if (response.ok) {
+                // 🌟 後端驗證成功，絲滑通關顯示主畫面
+                await showAppView(savedUser);
+                
+                // 如果剛剛有攔截到分享的網址，立刻自動彈出新增視窗
+                if (pendingSharedUrl) {
+                    triggerAutoAddModal(pendingSharedUrl, pendingSharedTitle);
+                }
+            } else {
+                // 🛑 驗證失敗 (例如帳號被刪除或造假)，清除無效記憶，留在登入畫面
+                console.warn("登入狀態已失效，請重新登入");
+                localStorage.removeItem('saved_username');
+            }
+        } catch (error) {
+            console.error("驗證伺服器連線失敗：", error);
+            // 如果只是網路不穩連不上，為了使用者體驗，暫時先讓他看到主畫面
+            await showAppView(savedUser);
         }
     }
 });

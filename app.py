@@ -173,6 +173,22 @@ def register():
         db.session.rollback() 
         return jsonify({"error": "註冊失敗，請稍後再試"}), 500
 
+@app.route('/api/auth/verify', methods=['GET'])
+def verify_auth():
+    # 我們的全域攔截器會自動把帳號放在 X-Username 標頭裡傳過來
+    username = request.headers.get('X-Username')
+    
+    if not username:
+        return jsonify({"error": "未提供驗證身分"}), 401
+        
+    # 去資料庫確認這個帳號是否真的存在
+    user = User.query.filter_by(username=username).first()
+    
+    if user:
+        return jsonify({"message": "驗證成功", "username": username}), 200
+    else:
+        return jsonify({"error": "帳號失效或不存在，請重新登入"}), 401
+
 @app.route('/api/login', methods=['POST'])
 def login():
     data = request.json
