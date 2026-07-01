@@ -29,6 +29,17 @@ app.json.ensure_ascii = False
 
 db = SQLAlchemy(app)
 
+@app.context_processor
+def inject_version():
+    def get_version(filename):
+        # 去 static 資料夾找出該檔案的絕對路徑
+        file_path = os.path.join(app.static_folder, filename)
+        # 如果檔案存在，回傳最後修改時間；不存在則回傳 0
+        return int(os.path.getmtime(file_path)) if os.path.exists(file_path) else 0
+    
+    # 讓所有 HTML 模板都能直接使用 get_version 這個函式
+    return dict(get_version=get_version)
+
 # ================= 資料庫模型設計 (群組協作版) =================
 
 class User(db.Model):
