@@ -576,19 +576,18 @@ async function fetchUrlPreview() {
     titleInput.placeholder = "🔄 正在自動解析網址...";
 
     try {
-        const response = await fetch('http://127.0.0.1:5002/api/fetch-preview', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: urlInput })
-        });
+        // 🌟 修改：改為 GET 請求，並將網址透過 Query 參數串接，使用 encodeURIComponent 進行安全編碼
+        const response = await fetch(`http://127.0.0.1:5002/api/preview?url=${encodeURIComponent(urlInput)}`);
 
         if (response.ok) {
             const data = await response.json();
 
-            if (data.title && !titleInput.value) {
+            // 如果後端有成功回傳標題，更新前端輸入框的值
+            if (data.title) {
                 titleInput.value = data.title;
             }
 
+            // 將後端抓到的縮圖網址，存入你原本就宣告好的全域變數中
             currentPreviewImage = data.image || '';
         }
     } catch (error) {

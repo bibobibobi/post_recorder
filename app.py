@@ -198,6 +198,49 @@ def login():
         return {"message": "登入成功！", "username": user.username}, 200
     else:
         return {"error": "帳號或密碼錯誤"}, 401
+    
+@app.route('/api/preview', methods=['GET'])
+def get_url_preview():
+    # 1. 從前端傳來的網址參數中取得 URL
+    target_url = request.args.get('url')
+    
+    if not target_url:
+        return jsonify({"title": "", "image": ""}), 400
+
+    try:
+        # 🛡️ 快取防護機制：先去資料庫找找看有沒有人存過這個網址
+        # (⚠️ 注意：請確認你的資料表名稱是 Link 還是其他名稱，並確保有 url 和 title 欄位)
+        existing_link = Link.query.filter_by(url=target_url).first()
+        
+        if existing_link and existing_link.title:
+            print("⚡ 快取命中！直接使用資料庫紀錄，不消耗 Microlink 額度")
+            # 如果資料庫裡有存過縮圖，也可以一併回傳 (假設你的欄位叫 image_url)
+            image_url = getattr(existing_link, 'image_url', "")
+            return jsonify({"title": existing_link.title, "image": image_url}), 200
+
+        # 🌐 資料庫沒見過這個網址，呼叫 Microlink 抓取全新資料
+        print(f"🌐 呼叫 Microlink 抓取: {target_url}")
+        api_url = f"https://api.microlink.io?url={target_url}"
+        
+        # 設定 timeout 避免第三方 API 卡死拖垮我們的伺服器
+        response = requests.get(api_url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        if data.get('status') == 'success':
+            # 提取標題與縮圖
+            title = data['data'].get('title', '未知網頁')
+            image_data = data['data'].get('image', {})
+            image_url = image_data.get('url', '') if image_data else ''
+            
+            return jsonify({"title": title, "image": image_url}), 200
+        else:
+            return jsonify({"title": "無法取得標題", "image": ""}), 200
+
+    except Exception as e:
+        print(f"❌ 預覽抓取錯誤: {e}")
+        # 即使發生錯誤，也要回傳格式正確的 JSON，避免前端崩潰
+        return jsonify({"title": "標題抓取失敗，請手動輸入", "image": ""}), 200
 
 @app.route('/')
 def home():

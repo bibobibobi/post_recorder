@@ -3,3 +3,4 @@ venv/
 __pycache__/
 api_test.http
 *.pyc
+test_scraper.py
