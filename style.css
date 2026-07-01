@@ -624,16 +624,6 @@ body {
     /* 與右邊圖片保持距離 */
 }
 
-/* 標題：粗體黑字、超出範圍變點點點 */
-.card-text-area .card-title {
-    font-size: 15px;
-    font-weight: 700;
-    margin-bottom: 4px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
 /* 來源：灰色小字 */
 .card-text-area .card-source {
     font-size: 13px;
