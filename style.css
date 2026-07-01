@@ -177,17 +177,20 @@ body {
     color: #333;
     margin-bottom: 6px;
 
-    /* 🌟 多行文字截斷魔法 */
+    /* 🌟 確保這四行完整存在，缺一不可！ */
     display: -webkit-box;
     -webkit-line-clamp: 2;
-    /* 限制最多顯示 2 行，你可以依喜好改成 1 或 3 */
+    /* 鎖定 2 行 */
     -webkit-box-orient: vertical;
+    /* 必須有這行，瀏覽器才知道要垂直排列 */
     overflow: hidden;
-    text-overflow: ellipsis;
-    /* 超過的地方顯示 ... */
+    /* 隱藏超過的範圍 */
 
-    /* 確保長串的英文網址或無意義字母也能強制換行，不會撐破版面 */
+    /* 確保長網址或沒有空白的英文字不會撐破版面 */
     word-break: break-word;
+
+    /* 💡 提示：這裡不需要加 white-space 屬性，也不用加 text-overflow: ellipsis; 
+       因為 -webkit-line-clamp 本身就會自動幫你產生完美的 ... */
 }
 
 .card-source {
