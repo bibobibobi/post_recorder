@@ -86,9 +86,9 @@ class Link(db.Model):
     __tablename__ = 'links'
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(100), nullable=False)
-    url = db.Column(db.String(500), nullable=False)
+    url = db.Column(db.Text, nullable=False)
     source = db.Column(db.String(50))
-    image_url = db.Column(db.String(500), nullable=True) 
+    image_url = db.Column(db.Text, nullable=True) 
     category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=False)
     subcategory_id = db.Column(db.Integer, db.ForeignKey('subcategories.id'), nullable=True)
 
