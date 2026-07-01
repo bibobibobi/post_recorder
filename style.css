@@ -159,6 +159,8 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 .card-info {
@@ -635,10 +637,29 @@ body {
     color: #8e8e93;
 }
 
-/* 右側縮圖區塊 */
 .card-image-area {
+    /* 🌟 最重要的一行：這代表「絕對不允許被壓縮 (Shrink)」 */
     flex-shrink: 0;
-    /* 防止圖片被擠壓 */
+
+    /* 給圖片一個固定的正方形空間，你可以根據喜好調整大小 */
+    width: 60px;
+    height: 60px;
+    margin-left: 12px;
+    /* 和左邊的文字保持距離 */
+
+    /* 確保裡面的圖片能完美居中裁切 */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+/* 順便確保圖片本身會完美填滿這個 60x60 的空間 */
+.card-thumbnail {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 }
 
 /* 圖片樣式：正方形、圓角、裁切適應 */
