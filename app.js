@@ -604,7 +604,30 @@ async function openAddModal() {
     document.getElementById('add-modal').style.display = 'flex';
     document.getElementById('add-link-form').reset();
     currentPreviewImage = '';
+
+    // 🌟 新增邏輯：複製首頁的群組清單到新增視窗中，並預設選中當前群組
+    const mainSelect = document.getElementById('group-select');
+    const modalSelect = document.getElementById('modal-group-select');
+    if (mainSelect && modalSelect) {
+        modalSelect.innerHTML = mainSelect.innerHTML;
+        modalSelect.value = currentGroupId;
+    }
+
     await refreshCategorySelects();
+}
+
+// 🌟 處理「在新增視窗中」臨時切換群組的動作
+async function handleModalGroupChange() {
+    const modalSelect = document.getElementById('modal-group-select');
+    const newGroupId = modalSelect.value;
+
+    if (newGroupId !== currentGroupId) {
+        // 1. 執行全域的群組切換 (這會一併把新選擇寫入長期記憶)
+        switchGroup(newGroupId);
+
+        // 2. 最重要的一步：群組換了，下方的「大分類」選單必須重新載入！
+        await refreshCategorySelects();
+    }
 }
 
 async function refreshCategorySelects(autoSelectCatId = null, autoSelectSubId = null) {
@@ -1084,11 +1107,11 @@ window.addEventListener('DOMContentLoaded', async () => {
         try {
             // 拿著記憶中的帳號，向後端發送驗證請求
             const response = await fetch('http://127.0.0.1:5002/api/auth/verify');
-            
+
             if (response.ok) {
                 // 🌟 後端驗證成功，絲滑通關顯示主畫面
                 await showAppView(savedUser);
-                
+
                 // 如果剛剛有攔截到分享的網址，立刻自動彈出新增視窗
                 if (pendingSharedUrl) {
                     triggerAutoAddModal(pendingSharedUrl, pendingSharedTitle);
@@ -1106,20 +1129,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
-// 🌟 獨立出一個自動處理分享網址的輔助函式，方便重複呼叫 (群組顯示優化版)
 async function triggerAutoAddModal(url, title) {
-    await openAddModal();
-
-    // --- 🌟 新增邏輯：抓取並顯示目前選定的群組 ---
-    const groupSelect = document.getElementById('group-select');
-    const groupDisplay = document.getElementById('target-group-display');
-
-    if (groupSelect && groupDisplay && groupSelect.options.length > 0) {
-        // 抓取首頁目前選中選項的文字 (例如 "bobo 的私人空間")
-        const groupName = groupSelect.options[groupSelect.selectedIndex].text;
-        groupDisplay.textContent = groupName;
-    }
-    // ---------------------------------------------
+    await openAddModal(); // 這裡面已經幫忙處理好群組選單拷貝了
 
     const urlInput = document.getElementById('new-url');
     const titleInput = document.getElementById('new-title');
