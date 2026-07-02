@@ -341,6 +341,36 @@ async function showAppView(username) {
 }
 
 // ================= 抓取與渲染首頁 (手風琴 + 標籤篩選版) =================
+// 處理分類搜尋與過濾
+function handleCategorySearch() {
+    // 1. 取得使用者輸入的文字，並轉成小寫以忽略大小寫差異
+    const keyword = document.getElementById('category-search-input').value.toLowerCase();
+
+    // 2. 抓出畫面上所有的手風琴標題 (大分類)
+    const headers = document.querySelectorAll('.accordion-header');
+
+    headers.forEach(header => {
+        // 抓取該分類的純文字名稱
+        const titleText = header.textContent.toLowerCase();
+
+        // 找到緊跟在 header 後面的內容區塊 (小分類與卡片)
+        const content = header.nextElementSibling;
+
+        // 3. 比對邏輯
+        if (titleText.includes(keyword)) {
+            // 如果名稱包含關鍵字，就顯示大分類
+            header.style.display = 'flex';
+        } else {
+            // 如果名稱沒有包含關鍵字，就把大分類隱藏
+            header.style.display = 'none';
+            // 同時確保它裡面的內容也是收合隱藏的狀態
+            if (content && content.classList.contains('accordion-content')) {
+                content.style.display = 'none';
+            }
+        }
+    });
+}
+
 async function fetchAndRenderApp() {
     const appContent = document.getElementById('app-content');
     appContent.innerHTML = '<p style="text-align: center; margin-top: 50px; color: #8e8e93;">正在載入你的珍藏...</p>';

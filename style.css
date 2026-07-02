@@ -846,3 +846,24 @@ body {
     transform: scale(0.95);
     /* 點擊時微縮小，增加按鈕回饋感 */
 }
+
+/* 分類搜尋框樣式 */
+.search-container input {
+    width: 100%;
+    padding: 10px 16px;
+    background-color: #f2f2f7;
+    border: none;
+    border-radius: 10px;
+    font-size: 16px;
+    color: #1c1c1e;
+    outline: none;
+    transition: background-color 0.2s;
+}
+
+.search-container input:focus {
+    background-color: #e5e5ea;
+}
+
+.search-container input::placeholder {
+    color: #8e8e93;
+}

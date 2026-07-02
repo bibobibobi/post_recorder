@@ -66,6 +66,10 @@
         <button onclick="openAddModal()" class="floating-action-btn">＋</button>
     </div>
 
+    <div class="search-container" style="padding: 10px 20px;">
+    <input type="text" id="category-search-input" placeholder="🔍 搜尋分類名稱..." oninput="handleCategorySearch()">
+    </div>
+
     <div id="app-content"></div>
 
     <div id="add-modal" class="modal-overlay" style="display: none;">
