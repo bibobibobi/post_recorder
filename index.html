@@ -86,7 +86,10 @@
                 </select>
             </div>
             <form id="add-link-form" class="add-form" onsubmit="submitNewLink(event)">
-                <input type="text" id="new-title" placeholder="標題" required>
+                <div class="input-with-clear">
+                    <input type="text" id="new-title" placeholder="標題" required oninput="toggleClearBtn()">
+                    <button type="button" id="clear-title-btn" class="input-clear-btn" onclick="clearTitleInput()">✖</button>
+                </div>
                 <input type="url" id="new-url" placeholder="網址" required>
 
                 <select id="new-source" required>

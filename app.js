@@ -618,6 +618,7 @@ async function fetchUrlPreview() {
             // 如果後端有成功回傳標題，更新前端輸入框的值
             if (data.title) {
                 titleInput.value = data.title;
+                toggleClearBtn(); // 更新清除按鈕的顯示狀態
             }
 
             // 將後端抓到的縮圖網址，存入你原本就宣告好的全域變數中
@@ -1180,4 +1181,22 @@ async function triggerAutoAddModal(url, title) {
     // 填寫完畢後清空暫存，避免重複觸發
     pendingSharedUrl = null;
     pendingSharedTitle = null;
+}
+
+// 顯示/隱藏標題的清除按鈕
+function toggleClearBtn() {
+    const titleInput = document.getElementById('new-title');
+    const clearBtn = document.getElementById('clear-title-btn');
+    if (titleInput && clearBtn) {
+        // 如果有文字就顯示 (flex)，沒文字就隱藏 (none)
+        clearBtn.style.display = titleInput.value.length > 0 ? 'flex' : 'none';
+    }
+}
+
+// 點擊叉叉時：清除內容並重新對焦
+function clearTitleInput() {
+    const titleInput = document.getElementById('new-title');
+    titleInput.value = '';
+    toggleClearBtn(); // 清除後隱藏按鈕
+    titleInput.focus(); // 🌟 貼心設計：讓手機小鍵盤自動彈出，準備輸入
 }

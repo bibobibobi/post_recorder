@@ -867,3 +867,48 @@ body {
 .search-container input::placeholder {
     color: #8e8e93;
 }
+
+/* =========================================
+   輸入框清除按鈕 (Clear Button)
+   ========================================= */
+.input-with-clear {
+    position: relative;
+    width: 100%;
+    margin-bottom: 16px;
+}
+
+.input-with-clear input {
+    width: 100%;
+    padding-right: 36px;
+    /* 🌟 關鍵：右邊留白，防止文字被叉叉蓋住 */
+    margin-bottom: 0 !important;
+    /* 避免加上原本表單的 margin 導致排版跑掉 */
+}
+
+.input-clear-btn {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    /* 確保絕對垂直置中 */
+    background: #d1d1d6;
+    /* iOS 風格的淺灰色圓圈 */
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    font-size: 10px;
+    display: none;
+    /* 預設隱藏，有文字才顯示 */
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    padding: 0;
+    transition: background 0.2s;
+}
+
+.input-clear-btn:active {
+    background: #8e8e93;
+    /* 點擊時顏色變深 */
+}
