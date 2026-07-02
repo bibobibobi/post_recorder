@@ -635,14 +635,14 @@ async function refreshCategorySelects(autoSelectCatId = null, autoSelectSubId = 
     const subSelect = document.getElementById('new-subcategory-select');
 
     catSelect.innerHTML = '<option value="" disabled selected>載入中...</option>';
-    subSelect.innerHTML = '<option value="" disabled selected>請先選擇大分類</option>';
-    subSelect.disabled = true;
+    subSelect.style.display = 'none';
+    subSelect.innerHTML = '';
 
     try {
         const response = await fetch('http://127.0.0.1:5002/api/categories');
         cachedCategoriesData = await response.json();
 
-        catSelect.innerHTML = '<option value="" disabled selected>1. 選擇大分類</option>';
+        catSelect.innerHTML = '<option value="" disabled selected>選擇大分類</option>';
         cachedCategoriesData.forEach(cat => {
             const catName = cat.name || cat.categoryName;
             catSelect.innerHTML += `<option value="${cat.id}">📁 ${catName}</option>`;
@@ -666,6 +666,8 @@ async function handleCategoryChange(autoSelectSubId = null) {
 
     if (catId === "ADD_NEW_CAT") {
         catSelect.value = "";
+        // 隱藏小分類，直到大分類建立完成
+        subSelect.style.display = 'none';
         const name = prompt("請輸入新的「大分類」名稱：");
         if (!name) return;
 
@@ -684,11 +686,15 @@ async function handleCategoryChange(autoSelectSubId = null) {
     }
 
     const selectedCat = cachedCategoriesData.find(c => c.id == catId);
-    if (!selectedCat) return;
+    if (!selectedCat) {
+        subSelect.style.display = 'none';
+        return;
+    }
 
-    subSelect.disabled = false;
+    // 🌟 核心魔法：大分類選擇成功，把小分類選單顯示出來！
+    subSelect.style.display = 'block';
     const catName = selectedCat.name || selectedCat.categoryName;
-    subSelect.innerHTML = `<option value="DIRECT">直接儲存在「${catName}」</option>`;
+    subSelect.innerHTML = `<option value="DIRECT" selected>📥 直接儲存在「${catName}」</option>`;
 
     if (selectedCat.subcategories && selectedCat.subcategories.length > 0) {
         selectedCat.subcategories.forEach(sub => {
@@ -696,7 +702,7 @@ async function handleCategoryChange(autoSelectSubId = null) {
         });
     }
 
-    subSelect.innerHTML += `<option value="ADD_NEW_SUB" style="color: #007AFF; font-weight: bold;">新增小分類...</option>`;
+    subSelect.innerHTML += `<option value="ADD_NEW_SUB" style="color: #007AFF; font-weight: bold;">➕ 新增小分類...</option>`;
 
     if (autoSelectSubId) {
         subSelect.value = autoSelectSubId;
