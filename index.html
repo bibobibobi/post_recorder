@@ -74,6 +74,10 @@
                 <h3>新增收藏</h3>
                 <button onclick="closeAddModal()" class="close-btn">✖</button>
             </div>
+            <div class="form-group" style="margin-bottom: 15px; background: #f2f2f7; padding: 10px; border-radius: 8px;">
+                <label style="font-size: 13px; color: #8e8e93;">儲存至：</label>
+                <div id="target-group-display" style="font-weight: bold;">讀取中...</div>
+            </div>
             <form id="add-link-form" class="add-form" onsubmit="submitNewLink(event)">
                 <input type="text" id="new-title" placeholder="標題" required>
                 <input type="url" id="new-url" placeholder="網址" required>
@@ -87,11 +91,11 @@
                 </select>
 
                 <select id="new-category-select" onchange="handleCategoryChange()" required>
-                    <option value="" disabled selected>1. 選擇大分類</option>
+                    <option value="" disabled selected>選擇大分類</option>
                 </select>
 
                 <select id="new-subcategory-select" onchange="handleSubcategoryChange()" disabled>
-                    <option value="" disabled selected>2. 請先選擇大分類</option>
+                    <option value="" disabled selected>小分類(請先選擇大分類)</option>
                 </select>
 
                 <button type="submit" class="submit-btn">儲存連結</button>

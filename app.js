@@ -74,16 +74,19 @@ async function loadMyGroups() {
             select.appendChild(option);
         });
 
-        if (!currentGroupId && groups.length > 0) {
-            currentGroupId = groups[0].id;
+        // 🌟 關鍵邏輯：
+        // 1. 如果已經有 currentGroupId (例如從外部分享載入時已設定)，就保持它
+        // 2. 如果沒有，才去選第一個群組
+        if (currentGroupId) {
+            select.value = currentGroupId;
             socket.emit('join_workspace', { group_id: currentGroupId });
-        } else if (currentGroupId) {
+        } else if (groups.length > 0) {
+            currentGroupId = groups[0].id;
             select.value = currentGroupId;
             socket.emit('join_workspace', { group_id: currentGroupId });
         }
 
         updateInviteButtonVisibility();
-
     } catch (error) {
         console.error('載入群組失敗:', error);
     }
@@ -1103,9 +1106,21 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
-// 🌟 獨立出一個自動處理分享網址的輔助函式，方便重複呼叫
+// 🌟 獨立出一個自動處理分享網址的輔助函式，方便重複呼叫 (群組顯示優化版)
 async function triggerAutoAddModal(url, title) {
     await openAddModal();
+
+    // --- 🌟 新增邏輯：抓取並顯示目前選定的群組 ---
+    const groupSelect = document.getElementById('group-select');
+    const groupDisplay = document.getElementById('target-group-display');
+
+    if (groupSelect && groupDisplay && groupSelect.options.length > 0) {
+        // 抓取首頁目前選中選項的文字 (例如 "bobo 的私人空間")
+        const groupName = groupSelect.options[groupSelect.selectedIndex].text;
+        groupDisplay.textContent = groupName;
+    }
+    // ---------------------------------------------
+
     const urlInput = document.getElementById('new-url');
     const titleInput = document.getElementById('new-title');
 
