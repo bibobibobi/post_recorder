@@ -1,6 +1,6 @@
 import eventlet
 eventlet.monkey_patch()
-
+import time
 import os
 import requests
 import uuid
@@ -199,60 +199,57 @@ def login():
     else:
         return {"error": "帳號或密碼錯誤"}, 401
     
-@app.route('/api/preview', methods=['GET'])
-def get_url_preview():
-    # 1. 從前端傳來的網址參數中取得 URL
-    target_url = request.args.get('url')
+@app.route('/api/preview', methods=['POST'])
+def preview_url():
+    data = request.json
+    target_url = data.get('url')
     
     if not target_url:
-        return jsonify({"title": "", "image": ""}), 400
+        return jsonify({"error": "缺少網址"}), 400
 
-    try:
-        # 🛡️ 快取防護機制：先去資料庫找找看有沒有人存過這個網址
-        # (⚠️ 注意：請確認你的資料表名稱是 Link 還是其他名稱，並確保有 url 和 title 欄位)
-        existing_link = Link.query.filter_by(url=target_url).first()
+    max_retries = 3  # 設定最多嘗試 3 次
+    
+    for attempt in range(max_retries):
+        try:
+            # 加入 timeout=8，避免 Microlink 卡死導致我們整個伺服器當機
+            response = requests.get(f"https://api.microlink.io?url={target_url}", timeout=8)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('status') == 'success':
+                    # 1. 抓取資料
+                    raw_title = data['data'].get('title', '未知網頁')
+                    description = data['data'].get('description', '')
+                    image_data = data['data'].get('image', {})
+                    image_url = image_data.get('url', '') if image_data else ''
+
+                    # 2. 清潔工：剪掉前面討厭的 0 或 0️⃣
+                    clean_title = raw_title
+                    if clean_title.startswith('0 '):
+                        clean_title = clean_title[2:]
+                    elif clean_title.startswith('0️⃣ '):
+                        clean_title = clean_title[4:]
+
+                    # 3. 移花接木術：如果是 Threads，就把描述當作真正的標題
+                    if 'threads' in target_url.lower():
+                        if description:
+                            clean_title = description[:40] + "..." if len(description) > 40 else description
+
+                    # 成功抓取，直接回傳結束迴圈！
+                    return jsonify({"title": clean_title, "image": image_url}), 200
+                    
+        except Exception as e:
+            print(f"Microlink 抓取失敗 (第 {attempt + 1} 次): {e}")
         
-        if existing_link and existing_link.title:
-            print("⚡ 快取命中！直接使用資料庫紀錄，不消耗 Microlink 額度")
-            # 如果資料庫裡有存過縮圖，也可以一併回傳 (假設你的欄位叫 image_url)
-            image_url = getattr(existing_link, 'image_url', "")
-            return jsonify({"title": existing_link.title, "image": image_url}), 200
+        # 如果走到這裡，代表上面失敗了。如果還沒到最後一次，就休息 0.8 秒再試
+        if attempt < max_retries - 1:
+            time.sleep(0.8)
 
-        # 🌐 資料庫沒見過這個網址，呼叫 Microlink 抓取全新資料
-        print(f"🌐 呼叫 Microlink 抓取: {target_url}")
-        api_url = f"https://api.microlink.io?url={target_url}"
-        
-        # 設定 timeout 避免第三方 API 卡死拖垮我們的伺服器
-        response = requests.get(api_url, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-        
-        if data.get('status') == 'success':
-            # 1. 把 Microlink 抓到的資料全部拿出來
-            raw_title = data['data'].get('title', '未知網頁')
-            description = data['data'].get('description', '')
-            image_data = data['data'].get('image', {})
-            image_url = image_data.get('url', '') if image_data else ''
-
-            # 2. 🧹 標題清潔工：剪掉前面討厭的 0 或 0️⃣
-            clean_title = raw_title
-            if clean_title.startswith('0 '):
-                clean_title = clean_title[2:]
-            elif clean_title.startswith('0️⃣ '):
-                clean_title = clean_title[4:]
-
-            # 3. 🧠 移花接木術：如果是 Threads，就把描述 (description) 當作真正的標題
-            if 'threads' in target_url.lower():
-                if description:
-                    # 擷取前 40 個字，避免貼文太長把畫面撐爆，後面加上刪節號
-                    clean_title = description[:40] + "..." if len(description) > 40 else description
-
-            return jsonify({"title": clean_title, "image": image_url}), 200
-
-    except Exception as e:
-        print(f"❌ 預覽抓取錯誤: {e}")
-        # 即使發生錯誤，也要回傳格式正確的 JSON，避免前端崩潰
-        return jsonify({"title": "標題抓取失敗，請手動輸入", "image": ""}), 200
+    # 🌟 如果 3 次都失敗了，回傳一個優雅的「備用預設值」，不要讓前端壞掉
+    return jsonify({
+        "title": "無法抓取預覽，請手動輸入", 
+        "image": ""
+    }), 200
 
 @app.route('/')
 def home():
