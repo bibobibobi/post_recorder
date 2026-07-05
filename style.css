@@ -777,6 +777,9 @@ body {
     font-weight: 500;
     cursor: pointer;
     transition: background 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
 
 .menu-item-btn:hover {

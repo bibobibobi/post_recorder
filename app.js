@@ -129,7 +129,7 @@ function updateInviteButtonVisibility() {
     const role = selectedOption.dataset.role;
 
     if (!isPersonal && role === 'owner') {
-        btnInvite.style.display = 'inline-block';
+        btnInvite.style.display = 'flex';
     } else {
         btnInvite.style.display = 'none';
     }
@@ -369,6 +369,23 @@ function handleCategorySearch() {
             }
         }
     });
+}
+
+// ================= 控制搜尋列展開/收合 =================
+function toggleSearchBar() {
+    const container = document.getElementById('search-bar-container');
+    const input = document.getElementById('category-search-input');
+
+    if (container.style.display === 'none' || container.style.display === '') {
+        // 展開搜尋框
+        container.style.display = 'block';
+        input.focus(); // 貼心設計：展開後自動讓游標閃爍，可以直接打字
+    } else {
+        // 收合搜尋框
+        container.style.display = 'none';
+        input.value = ''; // 關閉時順便清空輸入的字
+        handleCategorySearch(); // 觸發一次空白搜尋，讓所有分類恢復顯示
+    }
 }
 
 async function fetchAndRenderApp() {
