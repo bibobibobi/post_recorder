@@ -341,32 +341,80 @@ async function showAppView(username) {
 }
 
 // ================= 抓取與渲染首頁 (手風琴 + 標籤篩選版) =================
-// 處理分類搜尋與過濾
+// ================= 處理分類、標題、標籤與來源的超級搜尋 =================
 function handleCategorySearch() {
-    // 1. 取得使用者輸入的文字，並轉成小寫以忽略大小寫差異
-    const keyword = document.getElementById('category-search-input').value.toLowerCase();
-
-    // 2. 抓出畫面上所有的手風琴標題 (大分類)
+    const keyword = document.getElementById('category-search-input').value.toLowerCase().trim();
     const headers = document.querySelectorAll('.accordion-header');
 
     headers.forEach(header => {
-        // 抓取該分類的純文字名稱
         const titleText = header.textContent.toLowerCase();
-
-        // 找到緊跟在 header 後面的內容區塊 (小分類與卡片)
         const content = header.nextElementSibling;
+        const arrow = header.querySelector('.arrow-icon');
+        const catName = header.querySelector('span').innerText;
 
-        // 3. 比對邏輯
-        if (titleText.includes(keyword)) {
-            // 如果名稱包含關鍵字，就顯示大分類
-            header.style.display = 'flex';
-        } else {
-            // 如果名稱沒有包含關鍵字，就把大分類隱藏
-            header.style.display = 'none';
-            // 同時確保它裡面的內容也是收合隱藏的狀態
-            if (content && content.classList.contains('accordion-content')) {
-                content.style.display = 'none';
+        if (!content) return;
+
+        // 🌟 1. 重置卡片與小分類按鈕狀態
+        const cards = content.querySelectorAll('.filterable-card');
+        cards.forEach(card => card.style.display = 'flex');
+
+        const chips = content.querySelectorAll('.filter-chip');
+        chips.forEach(chip => {
+            chip.classList.remove('active');
+            if (chip.textContent.trim() === '全部') {
+                chip.classList.add('active');
             }
+        });
+
+        // 🌟 2. 如果搜尋框已被清空：完美還原成使用者「搜尋前」的手風琴開合狀態！
+        if (!keyword) {
+            header.style.display = 'flex';
+            // 比對記憶：如果是使用者原本打開的資料夾，就保持展開；其餘乖乖收合
+            if (catName === openCategoryName) {
+                content.style.display = 'block';
+                if (arrow) arrow.style.transform = 'rotate(180deg)';
+            } else {
+                content.style.display = 'none';
+                if (arrow) arrow.style.transform = 'rotate(0deg)';
+            }
+            return;
+        }
+
+        // 🌟 3. 開始關鍵字比對
+        const isCatNameMatch = titleText.includes(keyword);
+
+        let isSubNameMatch = false;
+        chips.forEach(chip => {
+            if (chip.textContent.toLowerCase().includes(keyword)) {
+                isSubNameMatch = true;
+            }
+        });
+
+        let hasCardMatch = false;
+        cards.forEach(card => {
+            const cardTitle = card.querySelector('.card-title')?.textContent.toLowerCase() || '';
+            const cardSource = card.querySelector('.card-source')?.textContent.toLowerCase() || '';
+            const cardTags = card.getAttribute('data-tags')?.toLowerCase() || '';
+
+            if (isCatNameMatch || isSubNameMatch || cardTitle.includes(keyword) || cardSource.includes(keyword) || cardTags.includes(keyword)) {
+                card.style.display = 'flex';
+                if (!isCatNameMatch && !isSubNameMatch) {
+                    hasCardMatch = true;
+                }
+            } else {
+                card.style.display = 'none';
+            }
+        });
+
+        // 🌟 4. 決定大分類與其身體的顯示與收合
+        if (isCatNameMatch || isSubNameMatch || hasCardMatch) {
+            header.style.display = 'flex';
+            content.style.display = 'block';
+            if (arrow) arrow.style.transform = 'rotate(180deg)';
+        } else {
+            header.style.display = 'none';
+            // 🛑 核心修復：當標題隱藏時，身體 (包含裡面的小分類標籤) 必須強制一起隱藏！絕對不留幽靈！
+            content.style.display = 'none';
         }
     });
 }
@@ -515,12 +563,22 @@ function generateLinkCard(link, subName, subId) {
         imageHtml = `<div class="card-thumbnail fallback-thumbnail">🔗</div>`;
     }
 
+    // 🌟 修正重點 1：標籤字體設為 12px、行高 1.4，上下 padding 設為 0px (只留左右 6px)，盒子高度就會與文字一模一樣！
+    const tagsHtml = (link.tags && link.tags.length > 0)
+        ? link.tags.map(t => `<span style="display: inline-flex; align-items: center; font-size: 12px; line-height: 1.4; background-color: #f2f2f7; color: #636366; padding: 0px 6px; border-radius: 4px; font-weight: 500; white-space: nowrap; flex-shrink: 0;">#${t}</span>`).join('')
+        : '';
+
     return `
-    <div class="swipe-container filterable-card" data-sub-id="${subId}">
+    <div class="swipe-container filterable-card" data-sub-id="${subId}" data-tags="${(link.tags || []).join(' ')}">
         <a href="${link.url}" target="_blank" class="swipe-content link-card memo-style-card">
             <div class="card-text-area">
                 <div class="card-title">${link.title}</div>
-                <div class="card-source">${link.source}</div>
+                
+                <!-- 🌟 修正重點 2：讓 Threads 文字也是 12px、行高 1.4，兩者就會在同一條水平畫線上完美切齊 -->
+                <div style="display: flex; align-items: center; gap: 6px; margin-top: 6px; overflow: hidden; width: 100%;">
+                    <div class="card-source" style="margin: 0; font-size: 12px; line-height: 1.4; color: #8e8e93; white-space: nowrap; flex-shrink: 0; display: inline-flex; align-items: center;">${link.source}</div>
+                    ${tagsHtml}
+                </div>
             </div>
             <div class="card-image-area">
                 ${imageHtml}
@@ -653,6 +711,11 @@ async function openAddModal() {
     document.getElementById('add-link-form').reset();
     currentPreviewImage = '';
 
+    const tagsSection = document.getElementById('tags-section');
+    if (tagsSection) tagsSection.style.display = 'none';
+    selectedTags = [];
+    isTagsExpanded = false;
+
     // 🌟 新增邏輯：複製首頁的群組清單到新增視窗中，並預設選中當前群組
     const mainSelect = document.getElementById('group-select');
     const modalSelect = document.getElementById('modal-group-select');
@@ -711,6 +774,10 @@ async function handleCategoryChange(autoSelectSubId = null) {
     const catSelect = document.getElementById('new-category-select');
     const subSelect = document.getElementById('new-subcategory-select');
     const catId = catSelect.value;
+
+    const tagsSection = document.getElementById('tags-section');
+    if (tagsSection) tagsSection.style.display = 'none';
+    selectedTags = [];
 
     if (catId === "ADD_NEW_CAT") {
         catSelect.value = "";
@@ -779,11 +846,36 @@ async function handleSubcategoryChange() {
             fetchAndRenderApp();
         }
     }
+
+    try {
+        // 抓取目前選中的小分類 ID
+        const subSelect = document.getElementById('new-subcategory-select');
+        const selectedSubId = subSelect.value;
+
+        // 向後端 API 請求該分類的熱門標籤
+        const response = await fetch(`http://127.0.0.1:5002/api/get_tags?subcategory_id=${selectedSubId}`);
+        currentAvailableTags = await response.json();
+    } catch (error) {
+        console.error("載入推薦標籤失敗:", error);
+        currentAvailableTags = []; // 遇到錯誤時保持空陣列，避免畫面崩潰
+    }
+
+    // 清空上次選的紀錄，重置為收合狀態
+    selectedTags = [];
+    isTagsExpanded = false;
+
+    // 顯示區塊並渲染
+    document.getElementById('tags-section').style.display = 'block';
+    renderTagChips();
 }
 
 function closeAddModal() {
     document.getElementById('add-modal').style.display = 'none';
     document.getElementById('add-link-form').reset();
+
+    const tagsSection = document.getElementById('tags-section');
+    if (tagsSection) tagsSection.style.display = 'none';
+    selectedTags = [];
 }
 
 async function submitNewLink(event) {
@@ -817,7 +909,8 @@ async function submitNewLink(event) {
                 source: source,
                 image_url: currentPreviewImage,
                 category_id: categoryId,
-                subcategory_id: subcategoryId
+                subcategory_id: subcategoryId,
+                tags: selectedTags
             })
         });
 
@@ -1216,4 +1309,77 @@ function clearTitleInput() {
     titleInput.value = '';
     toggleClearBtn(); // 清除後隱藏按鈕
     titleInput.focus(); // 🌟 貼心設計：讓手機小鍵盤自動彈出，準備輸入
+}
+
+// ================= 標籤系統管理 =================
+let currentAvailableTags = []; // 目前後端傳回來的這個分類的所有標籤
+let selectedTags = [];         // 使用者目前點擊選中的標籤
+let isTagsExpanded = false;    // 記錄目前是否為「展開」狀態
+
+// 1. 渲染標籤畫面的核心函式
+function renderTagChips() {
+    const container = document.getElementById('tags-container');
+    if (!container) return;
+    container.innerHTML = '';
+
+    // 決定要顯示幾筆：如果沒展開且總數超過 4 筆，就只切出前 4 筆；否則全顯
+    const limit = (!isTagsExpanded && currentAvailableTags.length > 4) ? 4 : currentAvailableTags.length;
+    const tagsToShow = currentAvailableTags.slice(0, limit);
+
+    // 產生一般標籤按鈕
+    tagsToShow.forEach(tag => {
+        const chip = document.createElement('div');
+        chip.className = `tag-chip ${selectedTags.includes(tag) ? 'active' : ''}`;
+        chip.textContent = tag;
+        chip.onclick = () => toggleTagSelection(tag);
+        container.appendChild(chip);
+    });
+
+    // 產生 [⋯ 更多 / 收起] 按鈕
+    if (currentAvailableTags.length > 4) {
+        const moreBtn = document.createElement('div');
+        moreBtn.className = 'tag-chip action-btn';
+        moreBtn.textContent = isTagsExpanded ? '收起' : `⋯ 更多 (${currentAvailableTags.length - 4})`;
+        moreBtn.onclick = () => {
+            isTagsExpanded = !isTagsExpanded;
+            renderTagChips(); // 重新渲染畫面
+        };
+        container.appendChild(moreBtn);
+    }
+
+    // 產生 [+ 新增] 按鈕 (讓使用者隨時可以自己打字建新標籤)
+    const addBtn = document.createElement('div');
+    addBtn.className = 'tag-chip action-btn';
+    addBtn.textContent = '+ 新增';
+    addBtn.onclick = handleAddNewTagInline;
+    container.appendChild(addBtn);
+}
+
+// 2. 處理點擊選取/取消選取
+function toggleTagSelection(tag) {
+    if (selectedTags.includes(tag)) {
+        // 如果已經選了，就移出陣列 (取消選取)
+        selectedTags = selectedTags.filter(t => t !== tag);
+    } else {
+        // 如果還沒選，就加進陣列
+        selectedTags.push(tag);
+    }
+    renderTagChips(); // 重新渲染以更新藍色高亮狀態
+}
+
+// 3. 處理現場打字新增標籤
+function handleAddNewTagInline() {
+    const newTag = prompt('請輸入新標籤名稱：');
+    if (newTag && newTag.trim() !== '') {
+        const cleanTag = newTag.trim();
+        // 如果標籤庫還沒有這個字，加到最前面
+        if (!currentAvailableTags.includes(cleanTag)) {
+            currentAvailableTags.unshift(cleanTag);
+        }
+        // 自動幫使用者預設選中這個新打的標籤
+        if (!selectedTags.includes(cleanTag)) {
+            selectedTags.push(cleanTag);
+        }
+        renderTagChips();
+    }
 }

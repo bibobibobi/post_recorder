@@ -915,3 +915,45 @@ body {
     background: #8e8e93;
     /* 點擊時顏色變深 */
 }
+
+/* ================= 推薦標籤晶片 (Tags Chips) ================= */
+.tags-chips-container {
+    display: flex;
+    flex-wrap: wrap;
+    /* 超出螢幕寬度自動換行 */
+    gap: 8px;
+    align-items: center;
+}
+
+/* 個別標籤的預設樣式 (極簡灰底) */
+.tag-chip {
+    padding: 6px 14px;
+    background-color: #f2f2f7;
+    color: #1c1c1e;
+    border-radius: 16px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+/* 滑鼠懸停或是輕觸時的回饋 */
+.tag-chip:active {
+    transform: scale(0.96);
+}
+
+/* 🌟 被選中時的樣式 (經典 iOS 藍) */
+.tag-chip.active {
+    background-color: #e5f1ff;
+    color: #007aff;
+    border-color: #007aff;
+    font-weight: 600;
+}
+
+/* 「更多」與「新增」功能按鈕的特殊顏色 */
+.tag-chip.action-btn {
+    background-color: #e5e5ea;
+    color: #666666;
+}

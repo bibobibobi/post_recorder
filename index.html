@@ -170,6 +170,15 @@
                     <option value="" disabled selected>小分類(請先選擇大分類)</option>
                 </select>
 
+                <!-- 🌟 快速推薦標籤區塊 (預設先隱藏，等選了分類再顯示) -->
+                <div id="tags-section" style="margin: 12px 0; display: none;">
+                    <label style="font-size: 13px; color: #8e8e93; display: block; margin-bottom: 8px;">推薦標籤
+                        (可多選)：</label>
+
+                    <!-- 標籤按鈕會由 JS 動態填入這裡 -->
+                    <div id="tags-container" class="tags-chips-container"></div>
+                </div>
+
                 <button type="submit" class="submit-btn">儲存連結</button>
             </form>
         </div>

@@ -11,6 +11,8 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
+from sqlalchemy import text
+from sqlalchemy.dialects.postgresql import ARRAY
 
 # 🌟 新增：引入 WebSocket 相關套件
 from flask_socketio import SocketIO, emit, join_room, leave_room
@@ -91,6 +93,7 @@ class Link(db.Model):
     image_url = db.Column(db.Text, nullable=True) 
     category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=False)
     subcategory_id = db.Column(db.Integer, db.ForeignKey('subcategories.id'), nullable=True)
+    tags = db.Column(ARRAY(db.String), default=[])
 
 # ================= 輔助函式：身份驗證 =================
 
@@ -199,10 +202,13 @@ def login():
     else:
         return {"error": "帳號或密碼錯誤"}, 401
     
-@app.route('/api/preview', methods=['POST'])
+@app.route('/api/preview', methods=['GET','POST'])
 def preview_url():
-    data = request.json
-    target_url = data.get('url')
+    if request.method == 'GET':
+        target_url = request.args.get('url')
+    else:
+        data = request.json or {}
+        target_url = data.get('url')
     
     if not target_url:
         return jsonify({"error": "缺少網址"}), 400
@@ -384,7 +390,7 @@ def get_categories():
         cat_data = {
             "id": cat.id,
             "name": cat.name,
-            "links": [{"id": l.id, "title": l.title, "url": l.url, "source": l.source, "image_url": l.image_url} for l in direct_links],
+            "links": [{"id": l.id, "title": l.title, "url": l.url, "source": l.source, "image_url": l.image_url, 'tags': l.tags or []} for l in direct_links],
             "subcategories": []
         }
         
@@ -393,14 +399,14 @@ def get_categories():
             cat_data["subcategories"].append({
                 "id": sub.id,
                 "name": sub.name,
-                "links": [{"id": l.id, "title": l.title, "url": l.url, "source": l.source, "image_url": l.image_url} for l in sub_links]
+                "links": [{"id": l.id, "title": l.title, "url": l.url, "source": l.source, "image_url": l.image_url, 'tags': l.tags or []} for l in sub_links]
             })
             
         result.append(cat_data)
         
     return jsonify(result), 200
 
-# 新增連結 API
+# 新增連結
 @app.route('/api/links', methods=['POST'])
 def add_link():
     user = get_current_user()
@@ -425,7 +431,8 @@ def add_link():
         source=data.get('source', '未提供'),
         image_url=data.get('image_url', ''), 
         category_id=data['category_id'],
-        subcategory_id=data.get('subcategory_id') 
+        subcategory_id=data.get('subcategory_id'),
+        tags=data.get('tags', [])
     )
     db.session.add(new_link)
     db.session.commit()
@@ -434,6 +441,37 @@ def add_link():
     socketio.emit('workspace_updated', room=f"group_{group_id}")
     
     return {"message": "連結新增成功！"}, 201
+
+# 熱門標籤排序
+@app.route('/api/get_tags', methods=['GET'])
+def get_tags():
+    try:
+        subcategory_id = request.args.get('subcategory_id')
+        if not subcategory_id:
+            return jsonify([]), 200
+
+        # 邏輯說明：
+        # unnest(tags) 會把資料庫裡原本陣列型態的標籤「攤平」成一行一行
+        # 接著使用 COUNT(*) 計算每個標籤出現的次數，並依照使用頻率由高至低排序
+        query = text("""
+            SELECT tag, COUNT(*) as freq
+            FROM links, unnest(tags) as tag
+            WHERE subcategory_id = :sub_id
+            GROUP BY tag
+            ORDER BY freq DESC
+            LIMIT 15;
+        """)
+        
+        result = db.session.execute(query, {'sub_id': subcategory_id}).fetchall()
+        
+        # 將查詢結果轉換成單純的字串列表，例如：["唐吉訶德", "藥妝", "免稅"]
+        hot_tags = [row[0] for row in result]
+        
+        return jsonify(hot_tags), 200
+
+    except Exception as e:
+        print(f"取得熱門標籤失敗: {e}")
+        return jsonify([]), 500
 
 # 刪除連結
 @app.route('/api/links/<int:link_id>', methods=['DELETE'])
