@@ -560,12 +560,14 @@ async function fetchAndRenderApp() {
 function generateLinkCard(link, subName, subId) {
     let imageHtml = '';
     if (link.image_url) {
-        imageHtml = `<img src="${link.image_url}" alt="preview" class="card-thumbnail">`;
+        // 🌟 核心修正：加上 referrerpolicy="no-referrer" 與 onerror 自動降級保護
+        // 1. referrerpolicy="no-referrer" 可以破解各大社群媒體的圖片防盜鏈
+        // 2. onerror="..." 確保如果對方伺服器真的徹底封鎖，至少會優雅地換成 🔗 符號，絕對不顯示難看的破圖字樣
+        imageHtml = `<img src="${link.image_url}" alt="preview" class="card-thumbnail" referrerpolicy="no-referrer" onerror="this.onerror=null; this.outerHTML='<div class=\\\'card-thumbnail fallback-thumbnail\\\'>🔗</div>';">`;
     } else {
         imageHtml = `<div class="card-thumbnail fallback-thumbnail">🔗</div>`;
     }
 
-    // 🌟 修正重點 1：標籤字體設為 12px、行高 1.4，上下 padding 設為 0px (只留左右 6px)，盒子高度就會與文字一模一樣！
     const tagsHtml = (link.tags && link.tags.length > 0)
         ? link.tags.map(t => `<span style="display: inline-flex; align-items: center; font-size: 12px; line-height: 1.4; background-color: #f2f2f7; color: #636366; padding: 0px 6px; border-radius: 4px; font-weight: 500; white-space: nowrap; flex-shrink: 0;">#${t}</span>`).join('')
         : '';
@@ -576,7 +578,6 @@ function generateLinkCard(link, subName, subId) {
             <div class="card-text-area">
                 <div class="card-title">${link.title}</div>
                 
-                <!-- 🌟 修正重點 2：讓 Threads 文字也是 12px、行高 1.4，兩者就會在同一條水平畫線上完美切齊 -->
                 <div style="display: flex; align-items: center; gap: 6px; margin-top: 6px; overflow: hidden; width: 100%;">
                     <div class="card-source" style="margin: 0; font-size: 12px; line-height: 1.4; color: #8e8e93; white-space: nowrap; flex-shrink: 0; display: inline-flex; align-items: center;">${link.source}</div>
                     ${tagsHtml}
@@ -712,6 +713,10 @@ async function openAddModal() {
     document.getElementById('add-modal').style.display = 'flex';
     document.getElementById('add-link-form').reset();
     currentPreviewImage = '';
+
+    // 🌟 修正：打開視窗時，暫時隱藏右下角的 + 號懸浮按鈕
+    const fab = document.querySelector('[onclick*="openAddModal"]');
+    if (fab) fab.style.display = 'none';
 
     const tagsSection = document.getElementById('tags-section');
     if (tagsSection) tagsSection.style.display = 'none';
@@ -877,6 +882,10 @@ async function handleSubcategoryChange() {
 function closeAddModal() {
     document.getElementById('add-modal').style.display = 'none';
     document.getElementById('add-link-form').reset();
+
+    // 🌟 修正：關閉視窗時，讓右下角的 + 號懸浮按鈕恢復顯示
+    const fab = document.querySelector('[onclick*="openAddModal"]');
+    if (fab) fab.style.display = '';
 
     const tagsSection = document.getElementById('tags-section');
     if (tagsSection) tagsSection.style.display = 'none';
@@ -1072,11 +1081,21 @@ function resetAllSwipes() {
 
 async function openCategoryModal() {
     document.getElementById('category-modal').style.display = 'flex';
+
+    // 🌟 修正：打開分類管理時，一樣暫時隱藏 + 號懸浮按鈕
+    const fab = document.querySelector('[onclick*="openAddModal"]');
+    if (fab) fab.style.display = 'none';
+
     await renderCategoryEditList();
 }
 
 function closeCategoryModal() {
     document.getElementById('category-modal').style.display = 'none';
+
+    // 🌟 修正：關閉分類管理時，讓 + 號懸浮按鈕恢復顯示
+    const fab = document.querySelector('[onclick*="openAddModal"]');
+    if (fab) fab.style.display = '';
+
     fetchAndRenderApp();
 }
 
