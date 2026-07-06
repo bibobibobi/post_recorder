@@ -693,8 +693,9 @@ async function fetchUrlPreview() {
     const originalPlaceholder = titleInput.placeholder;
     const originalBtnText = submitBtn ? submitBtn.textContent : '儲存連結';
 
-    // 🌟 1. 先把原本輸入框裡已經有的標題記下來（例如從書籤小工具帶來的完美標題！）
+    // 🌟 1. 先把原本已經在手上的標題「和圖片」記下來！（防洗掉護盾）
     const existingTitle = titleInput.value.trim();
+    const existingImage = currentPreviewImage; // 這裡可能已經是書籤順手牽羊抓來的好圖片！
 
     titleInput.placeholder = "🔄 正在解析網址...";
     if (submitBtn) {
@@ -709,31 +710,34 @@ async function fetchUrlPreview() {
         if (response.ok) {
             const data = await response.json();
 
+            // --- [保護標題] ---
             if (data.title) {
-                // 🌟 2. 核心防護罩：判斷後端抓回來的標題是不是「失敗/錯誤提示」
                 const isErrorTitle = data.title.includes('無法') || data.title.includes('失敗') || data.title.includes('請手動');
-
                 if (existingTitle && isErrorTitle) {
-                    // 情況 A：我們原本就已經有從書籤抓來的標題，且後端被阻擋傳回錯誤。
-                    // 👉 堅持「保留原本的好標題」，千萬不被錯誤訊息洗掉！
                     titleInput.value = existingTitle;
                 } else if (!isErrorTitle) {
-                    // 情況 B：如果後端順利抓到正常的標題，才進行更新
                     titleInput.value = data.title;
                 } else if (!existingTitle && isErrorTitle) {
-                    // 情況 C：如果原本欄位是空的（使用者手動貼網址），且後端真的抓不到，才顯示錯誤提示
                     titleInput.value = data.title;
                 }
                 toggleClearBtn();
             }
 
-            // 縮圖部分不管標題如何，照樣嘗試存入
-            currentPreviewImage = data.image || '';
+            // --- [保護圖片 (🌟核心修改)] ---
+            // 如果後端有順利抓到新圖片，就用後端的；
+            // 如果後端沒抓到 (傳回空值)，但我們手上「本來就有」從書籤抓來的圖片，就堅持用原本的！
+            if (data.image && data.image.trim() !== '') {
+                currentPreviewImage = data.image;
+            } else if (existingImage && existingImage.trim() !== '') {
+                currentPreviewImage = existingImage;
+            } else {
+                currentPreviewImage = '';
+            }
         }
     } catch (error) {
         console.error("解析失敗：", error);
-        // 萬一網路斷線或連線出錯，確保原本的好標題還在
         if (existingTitle) titleInput.value = existingTitle;
+        if (existingImage) currentPreviewImage = existingImage;
     } finally {
         titleInput.placeholder = originalPlaceholder;
         if (submitBtn) {
