@@ -437,12 +437,12 @@ function toggleSearchBar() {
     }
 }
 
+// ================= 抓取與渲染首頁 =================
 async function fetchAndRenderApp() {
     const appContent = document.getElementById('app-content');
     appContent.innerHTML = '<p style="text-align: center; margin-top: 50px; color: #8e8e93;">正在載入你的珍藏...</p>';
 
     try {
-        // 🌟 修正：改用相對路徑
         const response = await fetch('/api/categories');
         const categories = await response.json();
 
@@ -461,9 +461,15 @@ async function fetchAndRenderApp() {
         categories.forEach(cat => {
             const catName = cat.name || cat.categoryName || "未命名大分類";
 
+            // 🌟 UI升級：拔除 Emoji，改用高質感 SVG 資料夾圖示
             htmlContent += `
                 <button class="accordion-header" onclick="toggleAccordion(this)">
-                    <span>📁 ${catName}</span>
+                    <span style="display: flex; align-items: center; gap: 10px;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8e8e93" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                        ${catName}
+                    </span>
                     <span class="arrow-icon">▼</span>
                 </button>
                 <div class="accordion-content" style="padding-left: 0; padding-right: 0;">
@@ -514,36 +520,30 @@ async function fetchAndRenderApp() {
             htmlContent += `</div>`;
         });
 
-        appContent.innerHTML = htmlContent;
+        // 🌟 UI升級：在外層包一個 div，給予頂部 16px 的舒適留白，底部也多留一點空間防擋
+        appContent.innerHTML = `<div style="padding-top: 16px; padding-bottom: 40px;">${htmlContent}</div>`;
 
-        // 🌟 核心魔法：畫面重新產生後，自動恢復使用者的展開與標籤狀態
+        // 記憶狀態還原邏輯 (保持不變)
         if (openCategoryName) {
             const allHeaders = document.querySelectorAll('.accordion-header');
             allHeaders.forEach(header => {
-                const currentCatName = header.querySelector('span').innerText;
-                if (currentCatName === openCategoryName) {
+                const currentCatName = header.querySelector('span').innerText.trim();
+                if (currentCatName === openCategoryName.trim()) {
                     const content = header.nextElementSibling;
                     const arrow = header.querySelector('.arrow-icon');
-
-                    // 自動展開對應的分類
                     content.style.display = 'block';
                     arrow.style.transform = 'rotate(180deg)';
 
-                    // 如果使用者之前有選擇特定標籤，自動幫他點擊該標籤
                     if (activeFilterSubId !== 'all') {
                         const chips = content.querySelectorAll('.filter-chip');
                         let chipFound = false;
                         chips.forEach(chip => {
-                            // 比對 onclick 事件裡面的參數
                             if (chip.getAttribute('onclick').includes(`'${activeFilterSubId}'`)) {
                                 chipFound = true;
                                 filterLinks(chip, activeFilterSubId);
                             }
                         });
-                        // 如果因為小分類被刪除等原因找不到該標籤了，就退回 'all'
-                        if (!chipFound) {
-                            activeFilterSubId = 'all';
-                        }
+                        if (!chipFound) activeFilterSubId = 'all';
                     }
                 }
             });
@@ -1085,7 +1085,6 @@ async function renderCategoryEditList() {
     listContainer.innerHTML = '<p style="text-align: center;">載入中...</p>';
 
     try {
-        // 🌟 修正：改用相對路徑
         const response = await fetch('/api/categories');
         const categories = await response.json();
 
@@ -1099,35 +1098,50 @@ async function renderCategoryEditList() {
             const catName = cat.name || cat.categoryName || "未命名大分類";
 
             html += `
-            <div style="background: #f9f9f9; padding: 10px 15px; border-radius: 12px; margin-bottom: 15px;">
-                <div class="edit-list-item">
-                    <div class="edit-item-name">📁 ${catName}</div>
-                    <div class="action-btns">
-                        <button class="edit-action-btn" onclick="renameItem('category', ${cat.id}, '${cat.name}')">重新命名</button>
-                        <button class="delete-action-btn" onclick="deleteCategoryItem('category', ${cat.id})">刪除</button>
+            <div style="background: #ffffff; border: 1px solid #e5e5ea; padding: 12px 14px; border-radius: 12px; margin-bottom: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
+                
+                <!-- 大分類頂部 -->
+                <div class="edit-list-item" style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px; border-bottom: 1px solid #f2f2f7;">
+                    <div class="edit-item-name" style="font-size: 16px; font-weight: 600; color: #1c1c1e; display: flex; align-items: center; gap: 8px;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#007AFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                        <span>${catName}</span>
+                    </div>
+                    <!-- 加上 flex-shrink: 0 與 white-space: nowrap 防擠壓 -->
+                    <div class="action-btns" style="display: flex; gap: 12px; flex-shrink: 0; white-space: nowrap;">
+                        <span onclick="renameItem('category', ${cat.id}, '${cat.name}')" style="color: #007AFF; font-size: 14px; cursor: pointer;">編輯</span>
+                        <span onclick="deleteCategoryItem('category', ${cat.id})" style="color: #FF3B30; font-size: 14px; cursor: pointer;">刪除</span>
                     </div>
                 </div>
-                <div class="sub-edit-list">
+
+                <!-- 小分類列表 -->
+                <div class="sub-edit-list" style="padding-top: 8px;">
             `;
 
             if (cat.subcategories && cat.subcategories.length > 0) {
                 cat.subcategories.forEach(sub => {
+                    // 縮減左側縮排至 12px，釋放手機橫向寬度
                     html += `
-                    <div class="sub-edit-item">
-                        <div class="sub-item-name">↳ ${sub.name}</div>
-                        <div class="action-btns">
-                            <button class="edit-action-btn" onclick="renameItem('subcategory', ${sub.id}, '${sub.name}')">修改</button>
-                            <button class="delete-action-btn" onclick="deleteCategoryItem('subcategory', ${sub.id})">刪除</button>
+                    <div class="sub-edit-item" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0 8px 12px;">
+                        <div class="sub-item-name" style="color: #48484a; font-size: 14px; display: flex; align-items: center; gap: 8px;">
+                            <span style="width: 5px; height: 5px; background: #c7c7cc; border-radius: 50%; flex-shrink: 0;"></span>
+                            <span>${sub.name}</span>
+                        </div>
+                        <div class="action-btns" style="display: flex; gap: 12px; flex-shrink: 0; white-space: nowrap;">
+                            <span onclick="renameItem('subcategory', ${sub.id}, '${sub.name}')" style="color: #007AFF; font-size: 14px; cursor: pointer;">編輯</span>
+                            <span onclick="deleteCategoryItem('subcategory', ${sub.id})" style="color: #FF3B30; font-size: 14px; cursor: pointer;">刪除</span>
                         </div>
                     </div>
                     `;
                 });
             }
 
+            // 新增小分類的輸入框區域：縮減左側縮排至 12px，並對按鈕加上防換行保護
             html += `
-                    <div style="margin-top: 10px; display: flex; gap: 8px;">
-                        <input type="text" id="new-sub-input-${cat.id}" placeholder="新增小分類..." style="flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #ddd;">
-                        <button onclick="submitNewSubcategory(${cat.id})" style="background: #34C759; color: white; border: none; border-radius: 6px; padding: 0 12px;">+ 加入</button>
+                    <div style="margin-top: 12px; display: flex; gap: 8px; padding-left: 12px;">
+                        <input type="text" id="new-sub-input-${cat.id}" placeholder="新增小分類..." style="flex: 1; min-width: 0; padding: 8px 10px; border-radius: 8px; border: 1px solid #e5e5ea; font-size: 14px; background: #fafafa; outline: none;">
+                        <button onclick="submitNewSubcategory(${cat.id})" style="background: #f2f2f7; color: #007AFF; font-weight: 600; border: none; border-radius: 8px; padding: 0 12px; font-size: 14px; cursor: pointer; white-space: nowrap; flex-shrink: 0;">+ 加入</button>
                     </div>
                 </div>
             </div>
