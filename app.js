@@ -25,7 +25,8 @@ async function joinGroupByToken(token) {
     }
 
     try {
-        const response = await fetch('http://127.0.0.1:5002/api/groups/join', {
+        // 🌟 修正：改用相對路徑
+        const response = await fetch('/api/groups/join', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -56,7 +57,8 @@ async function loadMyGroups() {
     if (!username) return;
 
     try {
-        const response = await fetch('http://127.0.0.1:5002/api/my_groups', {
+        // 🌟 修正：改用相對路徑
+        const response = await fetch('/api/my_groups', {
             headers: { 'X-Username': username }
         });
         const groups = await response.json();
@@ -142,7 +144,8 @@ async function createNewGroup() {
 
     const username = localStorage.getItem('saved_username');
     try {
-        const response = await fetch('http://127.0.0.1:5002/api/groups', {
+        // 🌟 修正：改用相對路徑
+        const response = await fetch('/api/groups', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -171,7 +174,8 @@ async function generateInviteLink() {
     if (!currentGroupId) return;
 
     try {
-        const response = await fetch(`http://127.0.0.1:5002/api/groups/${currentGroupId}/invite`, {
+        // 🌟 修正：改用相對路徑
+        const response = await fetch(`/api/groups/${currentGroupId}/invite`, {
             method: 'POST',
             headers: { 'X-Username': username }
         });
@@ -196,11 +200,7 @@ async function generateInviteLink() {
 // ================= 全域 API 攔截器 (自動夾帶通行證) =================
 const originalFetch = window.fetch;
 window.fetch = async function (resource, config) {
-    // 核心邏輯：動態將固定的 localhost 網址替換為目前瀏覽器的實際網域，自動適應本地端與雲端環境
-    if (typeof resource === 'string' && resource.includes('127.0.0.1:5002')) {
-        resource = resource.replace('http://127.0.0.1:5002', window.location.origin);
-    }
-
+    // 🌟 修正：簡化攔截器，因為已經全部改為相對路徑，不需要再替換 IP 了
     if (typeof resource === 'string' && (resource.includes('/api/login') || resource.includes('/api/register'))) {
         return originalFetch(resource, config);
     }
@@ -274,7 +274,8 @@ async function handleSubmit() {
     const payload = isLoginMode ? { username, password } : { username, password, invite_code: inviteCode };
 
     try {
-        const response = await fetch(`http://127.0.0.1:5002${endpoint}`, {
+        // 🌟 修正：改用相對路徑，拔除 http://127.0.0.1:5002
+        const response = await fetch(endpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -441,7 +442,8 @@ async function fetchAndRenderApp() {
     appContent.innerHTML = '<p style="text-align: center; margin-top: 50px; color: #8e8e93;">正在載入你的珍藏...</p>';
 
     try {
-        const response = await fetch('http://127.0.0.1:5002/api/categories');
+        // 🌟 修正：改用相對路徑
+        const response = await fetch('/api/categories');
         const categories = await response.json();
 
         if (categories.length === 0) {
@@ -684,8 +686,8 @@ async function fetchUrlPreview() {
     titleInput.placeholder = "🔄 正在自動解析網址...";
 
     try {
-        // 🌟 修改：改為 GET 請求，並將網址透過 Query 參數串接，使用 encodeURIComponent 進行安全編碼
-        const response = await fetch(`http://127.0.0.1:5002/api/preview?url=${encodeURIComponent(urlInput)}`);
+        // 🌟 修正：改用相對路徑
+        const response = await fetch(`/api/preview?url=${encodeURIComponent(urlInput)}`);
 
         if (response.ok) {
             const data = await response.json();
@@ -750,7 +752,8 @@ async function refreshCategorySelects(autoSelectCatId = null, autoSelectSubId = 
     subSelect.innerHTML = '';
 
     try {
-        const response = await fetch('http://127.0.0.1:5002/api/categories');
+        // 🌟 修正：改用相對路徑
+        const response = await fetch('/api/categories');
         cachedCategoriesData = await response.json();
 
         catSelect.innerHTML = '<option value="" disabled selected>選擇大分類</option>';
@@ -786,7 +789,8 @@ async function handleCategoryChange(autoSelectSubId = null) {
         const name = prompt("請輸入新的「大分類」名稱：");
         if (!name) return;
 
-        const res = await fetch('http://127.0.0.1:5002/api/categories', {
+        // 🌟 修正：改用相對路徑
+        const res = await fetch('/api/categories', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: name })
@@ -834,7 +838,8 @@ async function handleSubcategoryChange() {
         if (!name) return;
 
         const catId = catSelect.value;
-        const res = await fetch(`http://127.0.0.1:5002/api/categories/${catId}/subcategories`, {
+        // 🌟 修正：改用相對路徑
+        const res = await fetch(`/api/categories/${catId}/subcategories`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: name })
@@ -852,8 +857,8 @@ async function handleSubcategoryChange() {
         const subSelect = document.getElementById('new-subcategory-select');
         const selectedSubId = subSelect.value;
 
-        // 向後端 API 請求該分類的熱門標籤
-        const response = await fetch(`http://127.0.0.1:5002/api/get_tags?subcategory_id=${selectedSubId}`);
+        // 🌟 修正：改用相對路徑，向後端 API 請求該分類的熱門標籤
+        const response = await fetch(`/api/get_tags?subcategory_id=${selectedSubId}`);
         currentAvailableTags = await response.json();
     } catch (error) {
         console.error("載入推薦標籤失敗:", error);
@@ -900,7 +905,8 @@ async function submitNewLink(event) {
     }
 
     try {
-        const response = await fetch('http://127.0.0.1:5002/api/links', {
+        // 🌟 修正：改用相對路徑
+        const response = await fetch('/api/links', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -939,7 +945,8 @@ async function deleteLink(linkId, btnElement) {
     if (!confirm("確定要刪除這個收藏嗎？")) return;
 
     try {
-        const response = await fetch(`http://127.0.0.1:5002/api/links/${linkId}`, {
+        // 🌟 修正：改用相對路徑
+        const response = await fetch(`/api/links/${linkId}`, {
             method: 'DELETE'
         });
 
@@ -1078,7 +1085,8 @@ async function renderCategoryEditList() {
     listContainer.innerHTML = '<p style="text-align: center;">載入中...</p>';
 
     try {
-        const response = await fetch('http://127.0.0.1:5002/api/categories');
+        // 🌟 修正：改用相對路徑
+        const response = await fetch('/api/categories');
         const categories = await response.json();
 
         if (categories.length === 0) {
@@ -1139,7 +1147,8 @@ async function submitNewCategory() {
     const name = inputEl.value.trim();
     if (!name) return alert("請輸入名稱");
 
-    await fetch('http://127.0.0.1:5002/api/categories', {
+    // 🌟 修正：改用相對路徑
+    await fetch('/api/categories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: name })
@@ -1153,7 +1162,8 @@ async function submitNewSubcategory(categoryId) {
     const name = inputEl.value.trim();
     if (!name) return alert("請輸入名稱");
 
-    await fetch(`http://127.0.0.1:5002/api/categories/${categoryId}/subcategories`, {
+    // 🌟 修正：改用相對路徑
+    await fetch(`/api/categories/${categoryId}/subcategories`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: name })
@@ -1165,7 +1175,8 @@ async function renameItem(type, id, oldName) {
     const newName = prompt("請輸入新的名稱：", oldName);
     if (!newName || newName === oldName) return;
 
-    await fetch('http://127.0.0.1:5002/api/rename', {
+    // 🌟 修正：改用相對路徑
+    await fetch('/api/rename', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type, id, new_name: newName })
@@ -1177,7 +1188,8 @@ async function deleteCategoryItem(type, id) {
     const msg = type === 'category' ? "⚠️ 警告：這將會刪除該分類下的「所有小分類與連結」！確定嗎？" : "確定要刪除這個小分類嗎？";
     if (!confirm(msg)) return;
 
-    await fetch('http://127.0.0.1:5002/api/delete_category', {
+    // 🌟 修正：改用相對路徑
+    await fetch('/api/delete_category', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type, id })
@@ -1252,8 +1264,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     const savedUser = localStorage.getItem('saved_username');
     if (savedUser) {
         try {
-            // 拿著記憶中的帳號，向後端發送驗證請求
-            const response = await fetch('http://127.0.0.1:5002/api/auth/verify');
+            // 🌟 修正：改用相對路徑，拿著記憶中的帳號向後端發送驗證請求
+            const response = await fetch('/api/auth/verify');
 
             if (response.ok) {
                 // 🌟 後端驗證成功，絲滑通關顯示主畫面
