@@ -1365,6 +1365,12 @@ async function triggerAutoAddModal(url, title) {
     if (urlInput) urlInput.value = url;
     if (titleInput && title) titleInput.value = title;
 
+    const urlParams = new URLSearchParams(window.location.search);
+    const imgParam = urlParams.get('img');
+    if (imgParam) {
+        currentPreviewImage = imgParam;
+    }
+
     autoDetectPlatform(url);
     fetchUrlPreview();
 
