@@ -686,32 +686,61 @@ function autoDetectPlatform(url) {
 async function fetchUrlPreview() {
     const urlInput = document.getElementById('new-url').value;
     const titleInput = document.getElementById('new-title');
+    const submitBtn = document.querySelector('#add-link-form button[type="submit"]');
 
     if (!urlInput || !urlInput.startsWith('http')) return;
 
     const originalPlaceholder = titleInput.placeholder;
-    titleInput.placeholder = "🔄 正在自動解析網址...";
+    const originalBtnText = submitBtn ? submitBtn.textContent : '儲存連結';
+
+    // 🌟 1. 先把原本輸入框裡已經有的標題記下來（例如從書籤小工具帶來的完美標題！）
+    const existingTitle = titleInput.value.trim();
+
+    titleInput.placeholder = "🔄 正在解析網址...";
+    if (submitBtn) {
+        submitBtn.textContent = "⏳ 抓取縮圖中...";
+        submitBtn.style.opacity = '0.7';
+        submitBtn.disabled = true;
+    }
 
     try {
-        // 🌟 修正：改用相對路徑
         const response = await fetch(`/api/preview?url=${encodeURIComponent(urlInput)}`);
 
         if (response.ok) {
             const data = await response.json();
 
-            // 如果後端有成功回傳標題，更新前端輸入框的值
             if (data.title) {
-                titleInput.value = data.title;
-                toggleClearBtn(); // 更新清除按鈕的顯示狀態
+                // 🌟 2. 核心防護罩：判斷後端抓回來的標題是不是「失敗/錯誤提示」
+                const isErrorTitle = data.title.includes('無法') || data.title.includes('失敗') || data.title.includes('請手動');
+
+                if (existingTitle && isErrorTitle) {
+                    // 情況 A：我們原本就已經有從書籤抓來的標題，且後端被阻擋傳回錯誤。
+                    // 👉 堅持「保留原本的好標題」，千萬不被錯誤訊息洗掉！
+                    titleInput.value = existingTitle;
+                } else if (!isErrorTitle) {
+                    // 情況 B：如果後端順利抓到正常的標題，才進行更新
+                    titleInput.value = data.title;
+                } else if (!existingTitle && isErrorTitle) {
+                    // 情況 C：如果原本欄位是空的（使用者手動貼網址），且後端真的抓不到，才顯示錯誤提示
+                    titleInput.value = data.title;
+                }
+                toggleClearBtn();
             }
 
-            // 將後端抓到的縮圖網址，存入你原本就宣告好的全域變數中
+            // 縮圖部分不管標題如何，照樣嘗試存入
             currentPreviewImage = data.image || '';
         }
     } catch (error) {
         console.error("解析失敗：", error);
+        // 萬一網路斷線或連線出錯，確保原本的好標題還在
+        if (existingTitle) titleInput.value = existingTitle;
     } finally {
         titleInput.placeholder = originalPlaceholder;
+        if (submitBtn) {
+            submitBtn.textContent = originalBtnText;
+            submitBtn.style.opacity = '1';
+            submitBtn.disabled = false;
+        }
     }
 }
 
