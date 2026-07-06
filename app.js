@@ -106,6 +106,12 @@ function switchGroup(groupId) {
 
     currentGroupId = groupId;
 
+    // 🌟 核心修正：強制同步主畫面的下拉選單，讓顯示的文字與實際內容保持一致！
+    const mainSelect = document.getElementById('group-select');
+    if (mainSelect) {
+        mainSelect.value = currentGroupId;
+    }
+
     if (currentGroupId) {
         socket.emit('join_workspace', { group_id: currentGroupId });
     }
