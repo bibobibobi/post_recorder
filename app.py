@@ -13,6 +13,7 @@ from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.orm.attributes import flag_modified
 
 # 🌟 新增：引入 WebSocket 相關套件
 from flask_socketio import SocketIO, emit, join_room, leave_room
@@ -472,6 +473,65 @@ def get_tags():
     except Exception as e:
         print(f"取得熱門標籤失敗: {e}")
         return jsonify([]), 500
+    
+
+# ================= 標籤管理 API (強制標記存檔版) =================
+
+@app.route('/api/tags', methods=['PUT'])
+def rename_tag():
+    data = request.get_json()
+    old_name = data.get('old_name')
+    new_name = data.get('new_name')
+    
+    if not old_name or not new_name:
+        return jsonify({"error": "標籤名稱不能為空"}), 400
+
+    try:
+        # 1. 抓取所有連結，在 Python 記憶體中極速過濾
+        all_links = Link.query.all()
+        links_to_update = [link for link in all_links if link.tags and old_name in link.tags]
+        
+        for link in links_to_update:
+            # 2. 替換標籤名稱，並透過 dict.fromkeys 自動順序去重
+            updated_tags = [new_name if t == old_name else t for t in link.tags]
+            link.tags = list(dict.fromkeys(updated_tags))
+            
+            # 🌟 核心關鍵：強力強制標記！告訴 SQLAlchemy 這個 ARRAY 欄位已被更改，必須存檔！
+            flag_modified(link, "tags")
+            
+        db.session.commit()
+        return jsonify({"message": "標籤修改成功", "updated_count": len(links_to_update)}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"修改標籤失敗: {str(e)}"}), 500
+
+
+@app.route('/api/tags', methods=['DELETE'])
+def delete_tag():
+    data = request.get_json()
+    tag_name = data.get('tag_name')
+    
+    if not tag_name:
+        return jsonify({"error": "請指定要刪除的標籤"}), 400
+
+    try:
+        all_links = Link.query.all()
+        links_to_update = [link for link in all_links if link.tags and tag_name in link.tags]
+        
+        for link in links_to_update:
+            # 2. 移除目標標籤
+            link.tags = [t for t in link.tags if t != tag_name]
+            
+            # 🌟 核心關鍵：強力強制標記！確保 PostgreSQL 確實刪除該陣列元素！
+            flag_modified(link, "tags")
+            
+        db.session.commit()
+        return jsonify({"message": "標籤刪除成功", "updated_count": len(links_to_update)}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"刪除標籤失敗: {str(e)}"}), 500
 
 # 刪除連結
 @app.route('/api/links/<int:link_id>', methods=['DELETE'])

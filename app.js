@@ -872,6 +872,7 @@ async function handleCategoryChange(autoSelectSubId = null) {
     }
 }
 
+// 處理小分類切換與載入推薦標籤 (免疫快取升級版)
 async function handleSubcategoryChange() {
     const catSelect = document.getElementById('new-category-select');
     const subSelect = document.getElementById('new-subcategory-select');
@@ -882,7 +883,6 @@ async function handleSubcategoryChange() {
         if (!name) return;
 
         const catId = catSelect.value;
-        // 🌟 修正：改用相對路徑
         const res = await fetch(`/api/categories/${catId}/subcategories`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -901,8 +901,9 @@ async function handleSubcategoryChange() {
         const subSelect = document.getElementById('new-subcategory-select');
         const selectedSubId = subSelect.value;
 
-        // 🌟 修正：改用相對路徑，向後端 API 請求該分類的熱門標籤
-        const response = await fetch(`/api/get_tags?subcategory_id=${selectedSubId}`);
+        // 🌟 核心破防魔法：加上 &_t=${Date.now()} 時間戳記！
+        // 強迫瀏覽器每次都要向後端發送真實請求，絕對不再拿到舊的快取標籤！
+        const response = await fetch(`/api/get_tags?subcategory_id=${selectedSubId}&_t=${Date.now()}`);
         currentAvailableTags = await response.json();
     } catch (error) {
         console.error("載入推薦標籤失敗:", error);
@@ -1401,7 +1402,7 @@ function clearTitleInput() {
     titleInput.focus(); // 🌟 貼心設計：讓手機小鍵盤自動彈出，準備輸入
 }
 
-// ================= 標籤系統管理 =================
+// ================= 標籤系統管理 (增強長按與右鍵編輯功能) =================
 let currentAvailableTags = []; // 目前後端傳回來的這個分類的所有標籤
 let selectedTags = [];         // 使用者目前點擊選中的標籤
 let isTagsExpanded = false;    // 記錄目前是否為「展開」狀態
@@ -1412,32 +1413,62 @@ function renderTagChips() {
     if (!container) return;
     container.innerHTML = '';
 
-    // 決定要顯示幾筆：如果沒展開且總數超過 4 筆，就只切出前 4 筆；否則全顯
     const limit = (!isTagsExpanded && currentAvailableTags.length > 4) ? 4 : currentAvailableTags.length;
     const tagsToShow = currentAvailableTags.slice(0, limit);
 
-    // 產生一般標籤按鈕
     tagsToShow.forEach(tag => {
         const chip = document.createElement('div');
         chip.className = `tag-chip ${selectedTags.includes(tag) ? 'active' : ''}`;
         chip.textContent = tag;
-        chip.onclick = () => toggleTagSelection(tag);
+
+        // 加上 CSS 防護，避免長按時手機選取文字
+        chip.style.userSelect = 'none';
+        chip.style.webkitUserSelect = 'none';
+
+        let pressTimer = null;
+        let isLongPress = false;
+
+        // 【手機觸控】長按 0.6 秒觸發
+        chip.addEventListener('touchstart', (e) => {
+            isLongPress = false;
+            pressTimer = setTimeout(() => {
+                isLongPress = true;
+                showTagActionMenu(tag); // 🌟 達到 0.6 秒，彈出專屬管理選單！
+            }, 600);
+        }, { passive: true });
+
+        chip.addEventListener('touchend', () => clearTimeout(pressTimer));
+        chip.addEventListener('touchmove', () => clearTimeout(pressTimer));
+
+        // 【電腦滑鼠】右鍵點擊立即觸發
+        chip.addEventListener('contextmenu', (e) => {
+            e.preventDefault(); // 🌟 成功攔截！阻止 Chrome 系統右鍵選單跳出來！
+            showTagActionMenu(tag);
+        });
+
+        // 【一般點擊】
+        chip.onclick = (e) => {
+            if (isLongPress) {
+                e.preventDefault();
+                return;
+            }
+            toggleTagSelection(tag);
+        };
+
         container.appendChild(chip);
     });
 
-    // 產生 [⋯ 更多 / 收起] 按鈕
     if (currentAvailableTags.length > 4) {
         const moreBtn = document.createElement('div');
         moreBtn.className = 'tag-chip action-btn';
         moreBtn.textContent = isTagsExpanded ? '收起' : `⋯ 更多 (${currentAvailableTags.length - 4})`;
         moreBtn.onclick = () => {
             isTagsExpanded = !isTagsExpanded;
-            renderTagChips(); // 重新渲染畫面
+            renderTagChips();
         };
         container.appendChild(moreBtn);
     }
 
-    // 產生 [+ 新增] 按鈕 (讓使用者隨時可以自己打字建新標籤)
     const addBtn = document.createElement('div');
     addBtn.className = 'tag-chip action-btn';
     addBtn.textContent = '+ 新增';
@@ -1445,19 +1476,137 @@ function renderTagChips() {
     container.appendChild(addBtn);
 }
 
-// 2. 處理點擊選取/取消選取
+// 🌟 全新升級：高質感、絕對不誤按的「標籤管理小彈窗」
+function showTagActionMenu(targetTag) {
+    // 先移除畫面上有可能殘留的舊選單
+    let oldModal = document.getElementById('tag-action-modal');
+    if (oldModal) oldModal.remove();
+
+    // 建立半透明背景與置中卡片
+    const modal = document.createElement('div');
+    modal.id = 'tag-action-modal';
+    modal.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+        background: rgba(0, 0, 0, 0.4); display: flex; justify-content: center;
+        align-items: center; z-index: 99999;
+    `;
+
+    modal.innerHTML = `
+        <div style="background: white; padding: 20px; border-radius: 16px; width: 80%; max-width: 280px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+            <div style="font-size: 16px; font-weight: 600; color: #1c1c1e; margin-bottom: 16px;">
+                標籤管理：#${targetTag}
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+                <button id="btn-rename-tag" style="background: #f2f2f7; color: #007AFF; border: none; padding: 12px; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer;">✏️ 重新命名</button>
+                <button id="btn-delete-tag" style="background: #fff0f0; color: #FF3B30; border: none; padding: 12px; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer;">🗑️ 永久刪除</button>
+                <button id="btn-cancel-tag" style="background: transparent; color: #8e8e93; border: none; padding: 10px; border-radius: 10px; font-size: 14px; cursor: pointer; margin-top: 4px;">取消</button>
+            </div>
+        </div>
+    `;
+
+    // 點擊半透明背景也可以直接安全關閉
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.remove();
+    });
+
+    document.body.appendChild(modal);
+
+    // 綁定三個按鈕的安全事件
+    document.getElementById('btn-cancel-tag').onclick = () => modal.remove();
+
+    document.getElementById('btn-rename-tag').onclick = async () => {
+        modal.remove();
+        await executeRenameTag(targetTag);
+    };
+
+    document.getElementById('btn-delete-tag').onclick = async () => {
+        modal.remove();
+        await executeDeleteTag(targetTag);
+    };
+}
+
+// 執行重新命名 (防假警報升級版)
+async function executeRenameTag(targetTag) {
+    const newName = prompt(`請輸入「#${targetTag}」的新名稱：`, targetTag);
+    if (!newName || newName.trim() === '' || newName.trim() === targetTag) return;
+
+    const cleanNewName = newName.trim();
+    try {
+        const res = await fetch('/api/tags', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ old_name: targetTag, new_name: cleanNewName })
+        });
+
+        // 🌟 防呆防護罩：安全解析 JSON，避免因為回應格式細節觸發當機
+        let data = {};
+        try {
+            data = await res.json();
+        } catch (e) {
+            console.warn("回傳內容非標準 JSON，但不影響主要功能", e);
+        }
+
+        if (res.ok) {
+            // 成功：更新記憶體並重繪畫面
+            currentAvailableTags = currentAvailableTags.map(t => t === targetTag ? cleanNewName : t);
+            selectedTags = selectedTags.map(t => t === targetTag ? cleanNewName : t);
+            renderTagChips();
+            if (typeof fetchAndRenderApp === 'function') fetchAndRenderApp();
+        } else {
+            alert('修改失敗：' + (data.error || `伺服器狀態碼 ${res.status}`));
+        }
+    } catch (error) {
+        console.error("重新命名發生例外錯誤：", error);
+        // 🌟 真實顯影：如果真的出錯，顯示真實錯誤原因，不再盲目報連線失敗
+        alert(`執行時發生例外：${error.message || error}`);
+    }
+}
+
+// 執行刪除 (防假警報升級版)
+async function executeDeleteTag(targetTag) {
+    if (!confirm(`⚠️ 確定要永久刪除「#${targetTag}」嗎？\n\n這會從所有收藏卡片上移除這個標籤！`)) return;
+
+    try {
+        const res = await fetch('/api/tags', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tag_name: targetTag })
+        });
+
+        let data = {};
+        try {
+            data = await res.json();
+        } catch (e) {
+            console.warn("回傳內容非標準 JSON，但不影響主要功能", e);
+        }
+
+        if (res.ok) {
+            currentAvailableTags = currentAvailableTags.filter(t => t !== targetTag);
+            selectedTags = selectedTags.filter(t => t !== targetTag);
+            renderTagChips();
+            if (typeof fetchAndRenderApp === 'function') fetchAndRenderApp();
+        } else {
+            alert('刪除失敗：' + (data.error || `伺服器狀態碼 ${res.status}`));
+        }
+    } catch (error) {
+        console.error("刪除標籤發生例外錯誤：", error);
+        alert(`執行時發生例外：${error.message || error}`);
+    }
+}
+
+// 標籤選取功能
 function toggleTagSelection(tag) {
     if (selectedTags.includes(tag)) {
         // 如果已經選了，就移出陣列 (取消選取)
         selectedTags = selectedTags.filter(t => t !== tag);
     } else {
-        // 如果還沒選，就加進陣列
+        // 如果還沒選，就加進陣列 (變成選中)
         selectedTags.push(tag);
     }
-    renderTagChips(); // 重新渲染以更新藍色高亮狀態
+    renderTagChips(); // 重新渲染畫面以更新藍色外觀
 }
 
-// 3. 處理現場打字新增標籤
+// 🌟 全新升級：直接在標籤區塊內新增標籤，無需跳出彈窗
 function handleAddNewTagInline() {
     const newTag = prompt('請輸入新標籤名稱：');
     if (newTag && newTag.trim() !== '') {
