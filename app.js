@@ -1488,30 +1488,42 @@ function renderTagChips() {
     container.appendChild(addBtn);
 }
 
-// 🌟 全新升級：高質感、絕對不誤按的「標籤管理小彈窗」
+// 全新升級：簡約現代感、去除 emoji 的「標籤管理小彈窗」
 function showTagActionMenu(targetTag) {
     // 先移除畫面上有可能殘留的舊選單
     let oldModal = document.getElementById('tag-action-modal');
     if (oldModal) oldModal.remove();
 
-    // 建立半透明背景與置中卡片
+    // 建立半透明背景與置中卡片 (加入毛玻璃模糊效果提升質感)
     const modal = document.createElement('div');
     modal.id = 'tag-action-modal';
     modal.style.cssText = `
         position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-        background: rgba(0, 0, 0, 0.4); display: flex; justify-content: center;
-        align-items: center; z-index: 99999;
+        background: rgba(0, 0, 0, 0.35); backdrop-filter: blur(4px);
+        display: flex; justify-content: center; align-items: center; z-index: 99999;
     `;
 
     modal.innerHTML = `
-        <div style="background: white; padding: 20px; border-radius: 16px; width: 80%; max-width: 280px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
-            <div style="font-size: 16px; font-weight: 600; color: #1c1c1e; margin-bottom: 16px;">
-                標籤管理：#${targetTag}
+        <div style="background: #ffffff; padding: 22px 20px 16px 20px; border-radius: 16px; width: 80%; max-width: 280px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.15); border: 1px solid rgba(0,0,0,0.05);">
+            <div style="font-size: 15px; font-weight: 600; color: #1c1c1e; margin-bottom: 18px; letter-spacing: 0.3px;">
+                #${targetTag}
             </div>
             <div style="display: flex; flex-direction: column; gap: 10px;">
-                <button id="btn-rename-tag" style="background: #f2f2f7; color: #007AFF; border: none; padding: 12px; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer;">✏️ 重新命名</button>
-                <button id="btn-delete-tag" style="background: #fff0f0; color: #FF3B30; border: none; padding: 12px; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer;">🗑️ 永久刪除</button>
-                <button id="btn-cancel-tag" style="background: transparent; color: #8e8e93; border: none; padding: 10px; border-radius: 10px; font-size: 14px; cursor: pointer; margin-top: 4px;">取消</button>
+                <button id="btn-rename-tag" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: #f2f2f7; color: #007AFF; border: none; padding: 12px; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
+                    </svg>
+                    <span>重新命名</span>
+                </button>
+                <button id="btn-delete-tag" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: #fff0f0; color: #FF3B30; border: none; padding: 12px; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 6h18"></path>
+                        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                    </svg>
+                    <span>永久刪除</span>
+                </button>
+                <button id="btn-cancel-tag" style="background: transparent; color: #8e8e93; border: none; padding: 10px; border-radius: 10px; font-size: 14px; cursor: pointer; margin-top: 2px;">取消</button>
             </div>
         </div>
     `;

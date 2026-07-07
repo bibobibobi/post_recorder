@@ -237,10 +237,13 @@ def preview_url():
                     elif clean_title.startswith('0️⃣ '):
                         clean_title = clean_title[4:]
 
-                    # 3. 移花接木術：如果是 Threads，就把描述當作真正的標題
-                    if 'threads' in target_url.lower():
-                        if description:
-                            clean_title = description[:40] + "..." if len(description) > 40 else description
+                    # 3. 🌟 移花接木術終極升級：同時支援 Threads 與 Instagram！
+                    # 只要是這兩個社群平台，一律優先把內文 (description) 當作真正的標題
+                    url_lower = target_url.lower()
+                    if 'threads' in url_lower or 'instagram' in url_lower:
+                        if description and description.strip():
+                            clean_desc = description.strip()
+                            clean_title = clean_desc[:40] + "..." if len(clean_desc) > 40 else clean_desc
 
                     # 成功抓取，直接回傳結束迴圈！
                     return jsonify({"title": clean_title, "image": image_url}), 200
