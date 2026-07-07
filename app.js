@@ -51,13 +51,12 @@ async function joinGroupByToken(token) {
 
 // ================= 群組與協作功能 =================
 
-// 1. 載入使用者的群組清單
+// 1. 載入使用者的群組清單 (加入了記憶讀取與防呆驗證)
 async function loadMyGroups() {
     const username = localStorage.getItem('saved_username');
     if (!username) return;
 
     try {
-        // 🌟 修正：改用相對路徑
         const response = await fetch('/api/my_groups', {
             headers: { 'X-Username': username }
         });
@@ -76,16 +75,27 @@ async function loadMyGroups() {
             select.appendChild(option);
         });
 
-        // 🌟 關鍵邏輯：
-        // 1. 如果已經有 currentGroupId (例如從外部分享載入時已設定)，就保持它
-        // 2. 如果沒有，才去選第一個群組
+        // 🌟 核心記憶邏輯升級：
         if (currentGroupId) {
+            // 情況 A：如果記憶體已經有指定群組 (例如剛建立新群組)，保持它
             select.value = currentGroupId;
             socket.emit('join_workspace', { group_id: currentGroupId });
         } else if (groups.length > 0) {
-            currentGroupId = groups[0].id;
+            // 情況 B：剛打開網頁，去 localStorage 尋找「上一次使用的群組 ID」
+            const savedGroupId = localStorage.getItem('last_used_group_id');
+
+            // 防呆驗證：檢查記憶中的 ID 是否真的還存在於目前的群組清單中
+            const targetGroup = groups.find(g => String(g.id) === String(savedGroupId));
+
+            if (targetGroup) {
+                currentGroupId = targetGroup.id; // 找到了！優先載入上一次的群組
+            } else {
+                currentGroupId = groups[0].id;   // 沒記憶或群組已被刪除，才退回預設第一個
+            }
+
             select.value = currentGroupId;
             socket.emit('join_workspace', { group_id: currentGroupId });
+            localStorage.setItem('last_used_group_id', currentGroupId); // 順手更新記憶
         }
 
         updateInviteButtonVisibility();
@@ -94,9 +104,8 @@ async function loadMyGroups() {
     }
 }
 
-// 2. 切換群組
+// 2. 切換群組 (加入了寫入記憶邏輯)
 function switchGroup(groupId) {
-    // 🌟 清空 UI 記憶：因為切換群組了，舊的分類不存在，必須強制收合
     openCategoryName = null;
     activeFilterSubId = 'all';
 
@@ -106,7 +115,9 @@ function switchGroup(groupId) {
 
     currentGroupId = groupId;
 
-    // 🌟 核心修正：強制同步主畫面的下拉選單，讓顯示的文字與實際內容保持一致！
+    // 🌟 核心寫入：只要有切換群組，立刻記到瀏覽器的永久記憶體裡！
+    localStorage.setItem('last_used_group_id', groupId);
+
     const mainSelect = document.getElementById('group-select');
     if (mainSelect) {
         mainSelect.value = currentGroupId;
@@ -315,11 +326,12 @@ async function handleSubmit() {
 
 function handleLogout() {
     localStorage.removeItem('saved_username');
+    localStorage.removeItem('last_used_group_id'); // 🌟 登出時，順手清空上一次使用的群組記憶
+
     if (currentGroupId) {
         socket.emit('leave_workspace', { group_id: currentGroupId });
     }
 
-    // 🌟 清空 UI 記憶：因為登出了，徹底洗掉記憶
     openCategoryName = null;
     activeFilterSubId = 'all';
     currentGroupId = null;
