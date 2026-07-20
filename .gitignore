@@ -4,3 +4,4 @@ __pycache__/
 api_test.http
 *.pyc
 test_scraper.py
+link-saver-firebase-key.json

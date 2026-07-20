@@ -4,6 +4,8 @@ import time
 import os
 import requests
 import uuid
+import firebase_admin
+from firebase_admin import credentials, storage
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify, send_file
@@ -19,6 +21,27 @@ from sqlalchemy.orm.attributes import flag_modified
 from flask_socketio import SocketIO, emit, join_room, leave_room
 
 load_dotenv()
+
+# ================= Firebase Storage 圖片儲存空間初始化 =================
+try:
+    # 讀取你在 .env 設定的金鑰路徑
+    cred_path = os.getenv('FIREBASE_KEY_PATH')
+    
+    # 確保程式啟動時只會初始化一次，避免重複執行報錯
+    if not firebase_admin._apps:
+        if cred_path and os.path.exists(cred_path):
+            cred = credentials.Certificate(cred_path)
+            
+            # 🌟 核心關鍵：必須明確指定你的圖片儲存空間網址 (Storage Bucket)
+            firebase_admin.initialize_app(cred, {
+                'storageBucket': 'link-saver-ea73c.firebasestorage.app' 
+            })
+            print("✅ Firebase Storage 初始化成功！")
+        else:
+            print("⚠️ 找不到 Firebase 金鑰檔案，圖片備份功能將無法使用。")
+            
+except Exception as e:
+    print(f"❌ Firebase 初始化失敗: {e}")
 
 app = Flask(__name__)
 CORS(app)
@@ -122,6 +145,42 @@ def get_requested_group_id(user):
             return None
     return get_personal_group_id(user)
 
+# ================= 🌟 新增：圖片搬運工 =================
+def backup_image_to_firebase(original_url):
+    """將外部圖片下載並轉存至 Firebase Storage，回傳永久網址"""
+    if not original_url:
+        return ""
+        
+    try:
+        # 1. 偽裝成普通瀏覽器去下載圖片資料
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+        response = requests.get(original_url, headers=headers, stream=True, timeout=10)
+        
+        if response.status_code != 200:
+            print(f"[圖片備份] 無法下載原始圖片，狀態碼: {response.status_code}")
+            return original_url 
+            
+        # 2. 隨機產生一個不重複的檔名 (存放在 thumbnails 資料夾下)
+        unique_filename = f"thumbnails/{uuid.uuid4().hex}.jpg"
+        
+        # 3. 呼叫 Firebase 準備上傳
+        bucket = storage.bucket()
+        blob = bucket.blob(unique_filename)
+        
+        # 4. 將記憶體中的圖片上傳，並標示 content-type
+        content_type = response.headers.get('content-type', 'image/jpeg')
+        blob.upload_from_string(response.content, content_type=content_type)
+        
+        # 5. 將圖片大門打開設為公開，並取得永久網址
+        blob.make_public()
+        print(f"[圖片備份] 成功！取得永久網址: {blob.public_url}")
+        
+        return blob.public_url
+        
+    except Exception as e:
+        print(f"[圖片備份] 發生未預期錯誤: {e}")
+        # 如果失敗，為了不影響使用者體驗，退回原本的網址
+        return original_url
 
 # ================= WebSocket 廣播電台頻道管理 =================
 # 🌟 新增：處理前端加入與離開房間的邏輯
@@ -429,11 +488,16 @@ def add_link():
     if not category:
         return {"error": "找不到大分類或權限不足"}, 403
 
+    # 🌟 新增：攔截暫時圖片網址，轉換成 Firebase 永久網址
+    temp_image_url = data.get('image_url', '')
+    final_image_url = backup_image_to_firebase(temp_image_url) if temp_image_url else ''
+
+    # 🌟 修改：將存入資料庫的 image_url 替換成 final_image_url
     new_link = Link(
         title=data.get('title', '無標題'),
         url=data['url'],
         source=data.get('source', '未提供'),
-        image_url=data.get('image_url', ''), 
+        image_url=final_image_url, 
         category_id=data['category_id'],
         subcategory_id=data.get('subcategory_id'),
         tags=data.get('tags', [])
