@@ -145,7 +145,7 @@ def get_requested_group_id(user):
             return None
     return get_personal_group_id(user)
 
-# ================= 🌟 新增：圖片搬運工 =================
+# 圖片儲存到firebase的輔助函式
 def backup_image_to_firebase(original_url):
     """將外部圖片下載並轉存至 Firebase Storage，回傳永久網址"""
     if not original_url:
@@ -181,6 +181,35 @@ def backup_image_to_firebase(original_url):
         print(f"[圖片備份] 發生未預期錯誤: {e}")
         # 如果失敗，為了不影響使用者體驗，退回原本的網址
         return original_url
+    
+# 背景處理縮圖 
+def process_image_in_background(app_context, link_id, temp_image_url, group_id):
+    """在背景執行圖片下載與上傳，完成後更新資料庫並廣播"""
+    # 必須把 Flask 的環境(app_context)傳進來，背景分身才懂怎麼連資料庫
+    with app_context:
+        try:
+            print(f"[背景任務] 開始處理貼文 ID {link_id} 的圖片...")
+            
+            # 1. 呼叫搬運工去 Firebase 拿永久網址
+            final_image_url = backup_image_to_firebase(temp_image_url)
+            
+            # 2. 如果有拿到新的永久網址，就更新資料庫
+            if final_image_url and final_image_url != temp_image_url:
+                link_to_update = Link.query.get(link_id)
+                if link_to_update:
+                    link_to_update.image_url = final_image_url
+                    db.session.commit()
+                    print(f"[背景任務] 貼文 ID {link_id} 圖片更新完成！")
+                    
+                    # 3. 廣播通知前端更新畫面
+                    socketio.emit('workspace_updated', room=f"group_{group_id}")
+                else:
+                    print(f"[背景任務] 找不到貼文 ID {link_id}，可能已被刪除。")
+            else:
+                print(f"[背景任務] 圖片沒有變更或下載失敗。")
+                
+        except Exception as e:
+            print(f"[背景任務] 執行時發生錯誤: {e}")
 
 # ================= WebSocket 廣播電台頻道管理 =================
 # 🌟 新增：處理前端加入與離開房間的邏輯
@@ -488,16 +517,15 @@ def add_link():
     if not category:
         return {"error": "找不到大分類或權限不足"}, 403
 
-    # 🌟 新增：攔截暫時圖片網址，轉換成 Firebase 永久網址
+    # 1. 攔截前端傳來的暫時圖片網址
     temp_image_url = data.get('image_url', '')
-    final_image_url = backup_image_to_firebase(temp_image_url) if temp_image_url else ''
 
-    # 🌟 修改：將存入資料庫的 image_url 替換成 final_image_url
+    # 2. 瞬間存檔：先把包含「暫時網址」的資料存進資料庫
     new_link = Link(
         title=data.get('title', '無標題'),
         url=data['url'],
         source=data.get('source', '未提供'),
-        image_url=final_image_url, 
+        image_url=temp_image_url, 
         category_id=data['category_id'],
         subcategory_id=data.get('subcategory_id'),
         tags=data.get('tags', [])
@@ -505,8 +533,18 @@ def add_link():
     db.session.add(new_link)
     db.session.commit()
     
-    # 🌟 新增：廣播通知房間內的所有人更新畫面
+    # 3. 瞬間廣播：讓前端畫面立刻出現新貼文 (無須等待圖片下載)
     socketio.emit('workspace_updated', room=f"group_{group_id}")
+    
+    # 4. 啟動背景分身：把繁重的下載與上傳工作丟到背景執行
+    if temp_image_url:
+        eventlet.spawn(
+            process_image_in_background, 
+            app.app_context(), 
+            new_link.id, 
+            temp_image_url, 
+            group_id
+        )
     
     return {"message": "連結新增成功！"}, 201
 
