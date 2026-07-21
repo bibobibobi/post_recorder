@@ -1119,6 +1119,7 @@ function enableDragScroll() {
         const closeOtherSliders = () => {
             sliders.forEach(other => {
                 if (other !== slider && other.scrollLeft > 0) {
+                    other.style.scrollSnapType = 'none';
                     other.style.scrollBehavior = 'smooth';
                     other.scrollLeft = 0;
 
@@ -1194,6 +1195,7 @@ function resetAllSwipes() {
     const sliders = document.querySelectorAll('.swipe-container');
     sliders.forEach(slider => {
         if (slider.scrollLeft > 0) {
+            slider.style.scrollSnapType = 'none';
             slider.style.scrollBehavior = 'auto';
             slider.scrollLeft = 0;
 
