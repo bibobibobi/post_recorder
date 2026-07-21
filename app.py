@@ -307,7 +307,7 @@ def preview_url():
         try:
             rapidapi_key = os.getenv('IG_RAPIDAPI_KEY')
             if not rapidapi_key:
-                print("未設定 RAPIDAPI_KEY 環境變數，跳過 IG 專屬解析")
+                print("⚠️ 未設定 IG_RAPIDAPI_KEY 環境變數，跳過 IG 專屬解析")
             else:
                 url = "https://instagram-looter2.p.rapidapi.com/post"
                 querystring = {"url": target_url}
@@ -316,6 +316,7 @@ def preview_url():
                     "x-rapidapi-host": "instagram-looter2.p.rapidapi.com"
                 }
 
+                print(f"👉 開始呼叫 RapidAPI: {target_url}")
                 response = requests.get(url, headers=headers, params=querystring, timeout=10)
                 
                 if response.status_code == 200:
@@ -331,18 +332,23 @@ def preview_url():
                         if edges:
                             text = edges[0].get("node", {}).get("text", "")
                             if text:
-                                # 去除前後空白並限制長度，避免破壞前端排版
+                                # 沿用你決定的 40 字限制
                                 clean_text = text.strip()
                                 caption = clean_text[:40] + "..." if len(clean_text) > 40 else clean_text
                     except Exception as e:
-                        print(f"解析 IG 內文發生錯誤: {e}")
+                        print(f"❌ 解析 IG 內文發生錯誤: {e}")
 
+                    print("✅ RapidAPI 抓取成功！")
                     return jsonify({"title": caption, "image": image_url}), 200
+                else:
+                    # 🌟 抓漏關鍵：如果失敗，把真實原因印在終端機上
+                    print(f"❌ RapidAPI 呼叫失敗！狀態碼: {response.status_code}")
+                    print(f"❌ 錯誤內容: {response.text}")
                     
         except Exception as e:
-            print(f"RapidAPI 抓取 IG 發生錯誤: {e}")
+            print(f"❌ RapidAPI 抓取 IG 發生未預期錯誤: {e}")
             # 若這裡失敗不中斷程式，讓它繼續往下使用 Microlink 作為備案處理
-
+    
     max_retries = 3  # 設定最多嘗試 3 次
     
     for attempt in range(max_retries):
