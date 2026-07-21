@@ -713,6 +713,54 @@ def delete_link(link_id):
         db.session.rollback()
         return {"error": str(e)}, 500
 
+# 編輯連結
+@app.route('/api/links/<int:link_id>', methods=['PUT'])
+def edit_link(link_id):
+    user = get_current_user()
+    if not user:
+        return {"error": "未登入"}, 401
+
+    group_id = get_requested_group_id(user)
+    if not group_id:
+        return {"error": "找不到指定的群組或權限不足"}, 403
+
+    # 1. 找出該筆貼文
+    link = Link.query.get(link_id)
+    if not link:
+        return {"error": "找不到該貼文"}, 404
+
+    # 2. 確保該貼文屬於目前群組的大分類 (權限管控)
+    category = Category.query.filter_by(id=link.category_id, group_id=group_id).first()
+    if not category:
+        return {"error": "無權限編輯此貼文"}, 403
+
+    data = request.json
+    if not data:
+        return {"error": "缺少資料"}, 400
+
+    # 3. 局部更新：前端有傳什麼欄位過來，就更新什麼
+    if 'title' in data:
+        link.title = data['title']
+    if 'url' in data:
+        link.url = data['url']
+    if 'category_id' in data:
+        link.category_id = data['category_id']
+    if 'subcategory_id' in data:
+        # 如果前端傳來 None 或空值，代表清空小分類
+        link.subcategory_id = data.get('subcategory_id') 
+    if 'tags' in data:
+        link.tags = data['tags']
+
+    # 4. 寫入資料庫並廣播
+    try:
+        db.session.commit()
+        socketio.emit('workspace_updated', room=f"group_{group_id}")
+        return {"message": "更新成功！"}, 200
+    except Exception as e:
+        db.session.rollback()
+        print(f"編輯貼文失敗: {e}")
+        return {"error": "資料庫更新失敗"}, 500
+
 # 新增大分類
 @app.route('/api/categories', methods=['POST'])
 def create_category():

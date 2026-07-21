@@ -403,32 +403,61 @@ body {
     -webkit-user-drag: none;
 }
 
-/* 🎯 狙擊右側外框 */
+/* 🎯 狙擊右側外框 (保留滑動機制，調整為透明與居中) */
 .swipe-container .swipe-actions {
-    flex: 0 0 80px;
+    flex: 0 0 140px;
+    /* 給兩顆圓圈剛剛好的空間 */
     scroll-snap-align: end;
     display: flex;
-    align-items: stretch;
+    align-items: center;
+    /* 讓按鈕垂直置中 */
+    justify-content: center;
+    /* 讓按鈕水平置中 */
+    gap: 12px;
+    /* 兩顆圓形中間的距離 */
+    margin: 0 !important;
+    padding: 0 10px 0 0 !important;
+    /* 右側留一點空隙，避免太貼邊 */
+    background-color: transparent !important;
+    /* 背景透明，讓圓圈浮現 */
+}
+
+/* 🎯 狙擊右側按鈕 (改為完美圓形) */
+.swipe-container .swipe-actions .action-btn {
+    width: 44px !important;
+    /* 強制固定寬度 */
+    height: 44px !important;
+    /* 強制固定高度 */
+    border-radius: 50% !important;
+    /* 變成正圓形 */
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    cursor: pointer;
+    flex: none;
+    /* 🌟 覆蓋原本的 flex: 1，防止按鈕被拉成長條形 */
     margin: 0 !important;
     padding: 0 !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    /* 淡淡陰影增加立體感 */
+    transition: transform 0.1s ease, opacity 0.2s ease;
 }
 
-/* 🎯 狙擊右側按鈕 */
-.swipe-container .swipe-actions button {
-    background-color: #FF3B30;
-    color: white;
-    border: none;
-    width: 100%;
-    font-size: 16px;
-    font-weight: bold;
-    cursor: pointer;
-    margin: 0 !important;
-    border-radius: 0 16px 16px 0 !important;
-    transition: opacity 0.2s;
+/* 點擊時的微小縮放回饋 */
+.swipe-container .swipe-actions .action-btn:active {
+    transform: scale(0.9);
+    opacity: 0.8;
 }
 
-.swipe-container .swipe-actions button:active {
-    opacity: 0.7;
+/* 🎯 個別按鈕顏色 */
+.swipe-container .swipe-actions .edit-btn {
+    background-color: #007AFF !important;
+}
+
+.swipe-container .swipe-actions .delete-btn {
+    background-color: #FF3B30 !important;
 }
 
 /* =========================================

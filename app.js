@@ -1,6 +1,9 @@
 // ================= 全域變數與 WebSocket 初始化 =================
 let currentGroupId = null;
 
+// 🌟 新增：用來記住目前正在編輯的連結 ID (編輯模式)
+let editingLinkId = null;
+
 // 🌟 新增：UI 狀態記憶區 (用來記住目前展開的分類與標籤)
 let openCategoryName = null;
 let activeFilterSubId = 'all';
@@ -516,6 +519,7 @@ async function fetchAndRenderApp() {
             if (cat.links && cat.links.length > 0) {
                 hasAnyLink = true;
                 cat.links.forEach(link => {
+                    link.category_id = cat.id; // 🌟 核心修復：確保直屬連結也有 category_id，避免後續篩選出錯
                     cardsHtml += generateLinkCard(link, null, 'none');
                 });
             }
@@ -524,6 +528,8 @@ async function fetchAndRenderApp() {
                 validSubs.forEach(sub => {
                     hasAnyLink = true;
                     sub.links.forEach(link => {
+                        link.category_id = cat.id;
+                        link.subcategory_id = sub.id;
                         cardsHtml += generateLinkCard(link, sub.name, sub.id);
                     });
                 });
@@ -578,9 +584,6 @@ async function fetchAndRenderApp() {
 function generateLinkCard(link, subName, subId) {
     let imageHtml = '';
     if (link.image_url) {
-        // 🌟 核心修正：加上 referrerpolicy="no-referrer" 與 onerror 自動降級保護
-        // 1. referrerpolicy="no-referrer" 可以破解各大社群媒體的圖片防盜鏈
-        // 2. onerror="..." 確保如果對方伺服器真的徹底封鎖，至少會優雅地換成 🔗 符號，絕對不顯示難看的破圖字樣
         imageHtml = `<img src="${link.image_url}" alt="preview" class="card-thumbnail" referrerpolicy="no-referrer" onerror="this.onerror=null; this.outerHTML='<div class=\\\'card-thumbnail fallback-thumbnail\\\'>🔗</div>';">`;
     } else {
         imageHtml = `<div class="card-thumbnail fallback-thumbnail">🔗</div>`;
@@ -589,6 +592,9 @@ function generateLinkCard(link, subName, subId) {
     const tagsHtml = (link.tags && link.tags.length > 0)
         ? link.tags.map(t => `<span style="display: inline-flex; align-items: center; font-size: 12px; line-height: 1.4; background-color: #f2f2f7; color: #636366; padding: 0px 6px; border-radius: 4px; font-weight: 500; white-space: nowrap; flex-shrink: 0;">#${t}</span>`).join('')
         : '';
+
+    // 🌟 將該貼文完整資料打包，準備傳給編輯視窗
+    const encodedLink = encodeURIComponent(JSON.stringify(link)).replace(/'/g, "%27");
 
     return `
     <div class="swipe-container filterable-card" data-sub-id="${subId}" data-tags="${(link.tags || []).join(' ')}">
@@ -606,7 +612,17 @@ function generateLinkCard(link, subName, subId) {
             </div>
         </a>
         <div class="swipe-actions">
-            <button onclick="deleteLink(${link.id}, this)">刪除</button>
+            <button class="action-btn edit-btn" onclick="openEditModal('${encodedLink}')">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
+                </svg>
+            </button>
+            <button class="action-btn delete-btn" onclick="deleteLink(${link.id}, this)">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+            </button>
         </div>
     </div>`;
 }
@@ -760,6 +776,43 @@ async function fetchUrlPreview() {
     }
 }
 
+// 🌟 點擊左滑的「編輯」按鈕時觸發
+async function openEditModal(encodedLink) {
+    const link = JSON.parse(decodeURIComponent(encodedLink));
+    editingLinkId = link.id; // 讓系統知道現在是編輯模式
+    currentPreviewImage = link.image_url || '';
+
+    // 1. 打開表單並隱藏右下角懸浮按鈕
+    document.getElementById('add-modal').style.display = 'flex';
+    const fab = document.querySelector('[onclick*="openAddModal"]');
+    if (fab) fab.style.display = 'none';
+
+    // 2. 更改按鈕文字與標題
+    const submitBtn = document.querySelector('#add-link-form button[type="submit"]');
+    if (submitBtn) submitBtn.textContent = '儲存變更';
+    const modalTitle = document.querySelector('#add-modal h3');
+    if (modalTitle) modalTitle.textContent = '編輯收藏';
+
+    // 3. 填入基本欄位
+    document.getElementById('new-url').value = link.url || '';
+    document.getElementById('new-title').value = link.title || '';
+    document.getElementById('new-source').value = link.source || '其他';
+    toggleClearBtn();
+
+    // 4. 同步群組
+    const mainSelect = document.getElementById('group-select');
+    const modalSelect = document.getElementById('modal-group-select');
+    if (mainSelect && modalSelect) {
+        modalSelect.innerHTML = mainSelect.innerHTML;
+        modalSelect.value = currentGroupId;
+    }
+
+    // 🌟 核心：把原本複雜的判斷收攏，直接將「大分類、小分類、標籤」一條龍傳遞下去！
+    // 並且強制把 tags 裡面的東西通通變成字串，防止數字 1 遇到字串 "1" 辨識失敗
+    const tagsToSelect = Array.isArray(link.tags) ? link.tags.map(String) : [];
+    await refreshCategorySelects(link.category_id, link.subcategory_id, tagsToSelect);
+}
+
 async function openAddModal() {
     document.getElementById('add-modal').style.display = 'flex';
     document.getElementById('add-link-form').reset();
@@ -799,7 +852,7 @@ async function handleModalGroupChange() {
     }
 }
 
-async function refreshCategorySelects(autoSelectCatId = null, autoSelectSubId = null) {
+async function refreshCategorySelects(autoSelectCatId = null, autoSelectSubId = null, autoSelectTags = null) {
     const catSelect = document.getElementById('new-category-select');
     const subSelect = document.getElementById('new-subcategory-select');
 
@@ -822,14 +875,14 @@ async function refreshCategorySelects(autoSelectCatId = null, autoSelectSubId = 
 
         if (autoSelectCatId) {
             catSelect.value = autoSelectCatId;
-            handleCategoryChange(autoSelectSubId);
+            await handleCategoryChange(autoSelectSubId, autoSelectTags);
         }
     } catch (error) {
         catSelect.innerHTML = '<option value="" disabled>載入失敗</option>';
     }
 }
 
-async function handleCategoryChange(autoSelectSubId = null) {
+async function handleCategoryChange(autoSelectSubId = null, autoSelectTags = null) {
     const catSelect = document.getElementById('new-category-select');
     const subSelect = document.getElementById('new-subcategory-select');
     const catId = catSelect.value;
@@ -879,13 +932,18 @@ async function handleCategoryChange(autoSelectSubId = null) {
 
     subSelect.innerHTML += `<option value="ADD_NEW_SUB" style="color: #007AFF; font-weight: bold;">➕ 新增小分類...</option>`;
 
+    // 🌟 讓小分類與標籤順利接力往下傳
     if (autoSelectSubId) {
         subSelect.value = autoSelectSubId;
+        await handleSubcategoryChange(autoSelectTags);
+    } else if (autoSelectTags && Array.isArray(autoSelectTags)) {
+        // 若該筆資料沒有小分類(DIRECT)，雖然隱藏標籤庫，但必須把標籤先偷偷記在記憶體中
+        selectedTags = autoSelectTags.map(String);
     }
 }
 
 // 處理小分類切換與載入推薦標籤 (免疫快取升級版)
-async function handleSubcategoryChange() {
+async function handleSubcategoryChange(preSelectedTags = null) {
     const catSelect = document.getElementById('new-category-select');
     const subSelect = document.getElementById('new-subcategory-select');
 
@@ -904,29 +962,42 @@ async function handleSubcategoryChange() {
 
         if (res.ok) {
             await refreshCategorySelects(catId, data.id);
-            fetchAndRenderApp();
+            if (typeof fetchAndRenderApp === 'function') fetchAndRenderApp();
         }
+        return;
+    }
+
+    const selectedSubId = subSelect.value;
+
+    // 防呆檢查：過濾掉 HTML 傳進來的滑鼠點擊事件 (Event Object)
+    const isArray = Array.isArray(preSelectedTags);
+
+    if (selectedSubId === "DIRECT" || selectedSubId === "") {
+        document.getElementById('tags-section').style.display = 'none';
+        selectedTags = isArray ? preSelectedTags.map(String) : [];
+        return;
     }
 
     try {
-        // 抓取目前選中的小分類 ID
-        const subSelect = document.getElementById('new-subcategory-select');
-        const selectedSubId = subSelect.value;
-
-        // 🌟 核心破防魔法：加上 &_t=${Date.now()} 時間戳記！
-        // 強迫瀏覽器每次都要向後端發送真實請求，絕對不再拿到舊的快取標籤！
         const response = await fetch(`/api/get_tags?subcategory_id=${selectedSubId}&_t=${Date.now()}`);
         currentAvailableTags = await response.json();
     } catch (error) {
         console.error("載入推薦標籤失敗:", error);
-        currentAvailableTags = []; // 遇到錯誤時保持空陣列，避免畫面崩潰
+        currentAvailableTags = [];
     }
 
-    // 清空上次選的紀錄，重置為收合狀態
-    selectedTags = [];
-    isTagsExpanded = false;
+    // 🌟 終極防護：確保轉型為字串，並精準賦值
+    selectedTags = isArray ? preSelectedTags.map(String) : [];
 
-    // 顯示區塊並渲染
+    if (isArray) {
+        selectedTags.forEach(tag => {
+            if (!currentAvailableTags.includes(tag)) {
+                currentAvailableTags.unshift(tag);
+            }
+        });
+    }
+
+    isTagsExpanded = false;
     document.getElementById('tags-section').style.display = 'block';
     renderTagChips();
 }
@@ -942,6 +1013,8 @@ function closeAddModal() {
     const tagsSection = document.getElementById('tags-section');
     if (tagsSection) tagsSection.style.display = 'none';
     selectedTags = [];
+
+    editingLinkId = null; // 重置編輯模式
 }
 
 async function submitNewLink(event) {
@@ -966,9 +1039,12 @@ async function submitNewLink(event) {
     }
 
     try {
-        // 🌟 修正：改用相對路徑
-        const response = await fetch('/api/links', {
-            method: 'POST',
+        // 🌟 聰明切換：根據記憶體決定是 新增(POST) 還是 更新(PUT)
+        const method = editingLinkId ? 'PUT' : 'POST';
+        const endpoint = editingLinkId ? `/api/links/${editingLinkId}` : '/api/links';
+
+        const response = await fetch(endpoint, {
+            method: method,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 title: title,
@@ -982,7 +1058,6 @@ async function submitNewLink(event) {
         });
 
         if (response.ok) {
-            // 🌟 自動切換展開剛剛新增的大分類與標籤，讓視覺停留在對的地方
             const selectedCatName = catSelect.options[catSelect.selectedIndex].text.replace('📁 ', '');
             openCategoryName = `📁 ${selectedCatName}`;
             if (subcategoryId) {
@@ -994,7 +1069,7 @@ async function submitNewLink(event) {
             closeAddModal();
             fetchAndRenderApp();
         } else {
-            alert('新增失敗，請檢查網路連線。');
+            alert('儲存失敗，請檢查網路連線。');
         }
     } catch (error) {
         alert('連線錯誤，請確認 Flask 伺服器是否運作中。');
@@ -1103,8 +1178,8 @@ function enableDragScroll() {
     function smoothSnap(slider) {
         slider.style.scrollBehavior = 'smooth';
 
-        if (slider.scrollLeft > 40) {
-            slider.scrollLeft = 80;
+        if (slider.scrollLeft > 35) {
+            slider.scrollLeft = 140;
         } else {
             slider.scrollLeft = 0;
         }
