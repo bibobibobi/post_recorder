@@ -301,6 +301,47 @@ def preview_url():
     
     if not target_url:
         return jsonify({"error": "缺少網址"}), 400
+    
+    # IG 專屬解析 (使用 RapidAPI)
+    if 'instagram.com' in target_url.lower():
+        try:
+            rapidapi_key = os.getenv('IG_RAPIDAPI_KEY')
+            if not rapidapi_key:
+                print("未設定 RAPIDAPI_KEY 環境變數，跳過 IG 專屬解析")
+            else:
+                url = "https://instagram-looter2.p.rapidapi.com/post"
+                querystring = {"url": target_url}
+                headers = {
+                    "x-rapidapi-key": rapidapi_key,
+                    "x-rapidapi-host": "instagram-looter2.p.rapidapi.com"
+                }
+
+                response = requests.get(url, headers=headers, params=querystring, timeout=10)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    
+                    # 抓取最高畫質圖片
+                    image_url = data.get("display_url", "")
+                    caption = "Instagram 貼文"
+                    
+                    # 深入抓取貼文內文
+                    try:
+                        edges = data.get("edge_media_to_caption", {}).get("edges", [])
+                        if edges:
+                            text = edges[0].get("node", {}).get("text", "")
+                            if text:
+                                # 去除前後空白並限制長度，避免破壞前端排版
+                                clean_text = text.strip()
+                                caption = clean_text[:40] + "..." if len(clean_text) > 40 else clean_text
+                    except Exception as e:
+                        print(f"解析 IG 內文發生錯誤: {e}")
+
+                    return jsonify({"title": caption, "image": image_url}), 200
+                    
+        except Exception as e:
+            print(f"RapidAPI 抓取 IG 發生錯誤: {e}")
+            # 若這裡失敗不中斷程式，讓它繼續往下使用 Microlink 作為備案處理
 
     max_retries = 3  # 設定最多嘗試 3 次
     
