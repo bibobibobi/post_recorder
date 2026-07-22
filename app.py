@@ -5,6 +5,7 @@ import os
 import requests
 import uuid
 import firebase_admin
+import urllib.parse
 from firebase_admin import credentials, storage
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
@@ -181,6 +182,35 @@ def backup_image_to_firebase(original_url):
         print(f"[圖片備份] 發生未預期錯誤: {e}")
         # 如果失敗，為了不影響使用者體驗，退回原本的網址
         return original_url
+
+# 刪除 Firebase Storage 的圖片，避免孤兒檔案    
+def delete_image_from_firebase(image_url):
+    """從 Firebase Storage 刪除對應的圖片，避免產生孤兒檔案"""
+    # 如果沒有網址，或者網址裡面沒有我們指定的資料夾名稱，就不處理
+    if not image_url or "thumbnails/" not in image_url:
+        return 
+        
+    try:
+        # 1. 從長長的公開網址中，精準擷取出「thumbnails/xxxxx.jpg」
+        # 用 "thumbnails/" 切割拿後半段，再用 "?" 切割去掉網址參數(如果有)
+        path_part = image_url.split("thumbnails/")[1].split("?")[0]
+        blob_name = f"thumbnails/{path_part}"
+        
+        # 把網址編碼 (例如空白變成 %20) 轉回正常文字，確保檔名完全一致
+        blob_name = urllib.parse.unquote(blob_name)
+        
+        # 2. 呼叫 Firebase 執行刪除
+        bucket = storage.bucket()
+        blob = bucket.blob(blob_name)
+        
+        if blob.exists():
+            blob.delete()
+            print(f"[圖片刪除] 成功清理孤兒圖片: {blob_name}")
+        else:
+            print(f"[圖片刪除] 找不到該圖片，可能已經被刪除: {blob_name}")
+            
+    except Exception as e:
+        print(f"[圖片刪除] 發生未預期錯誤: {e}")
     
 # 背景處理縮圖 
 def process_image_in_background(app_context, link_id, temp_image_url, group_id):
@@ -702,6 +732,7 @@ def delete_link(link_id):
         return {"error": "找不到該連結或權限不足"}, 404
         
     try:
+        delete_image_from_firebase(link_to_delete.image_url)
         db.session.delete(link_to_delete)
         db.session.commit()
         
@@ -739,6 +770,7 @@ def batch_delete_links():
 
         # 2. 執行刪除
         for link in links_to_delete:
+            delete_image_from_firebase(link.image_url)
             db.session.delete(link)
         
         # 3. 儲存變更並發送即時廣播
