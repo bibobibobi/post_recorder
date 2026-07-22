@@ -1873,7 +1873,7 @@ async function openBatchMoveModal() {
 
         categories.forEach(cat => {
             const catName = cat.name || cat.categoryName;
-            catSelect.innerHTML += `<option value="${cat.id}">📁 ${catName}</option>`;
+            catSelect.innerHTML += `<option value="${cat.id}">${catName}</option>`;
         });
     } catch (error) {
         console.error("載入分類失敗:", error);
@@ -1898,7 +1898,7 @@ async function handleBatchMoveCategoryChange() {
         if (selectedCat) {
             subSelect.style.display = 'block';
             const catName = selectedCat.name || selectedCat.categoryName;
-            subSelect.innerHTML = `<option value="DIRECT" selected>📥 直接儲存在「${catName}」</option>`;
+            subSelect.innerHTML = `<option value="DIRECT" selected>直接儲存在「${catName}」</option>`;
 
             if (selectedCat.subcategories && selectedCat.subcategories.length > 0) {
                 selectedCat.subcategories.forEach(sub => {
