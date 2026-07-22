@@ -1,12 +1,15 @@
 // ================= 全域變數與 WebSocket 初始化 =================
 let currentGroupId = null;
 
-// 🌟 新增：用來記住目前正在編輯的連結 ID (編輯模式)
+// 記住目前正在編輯的連結 ID (編輯模式)
 let editingLinkId = null;
 
-// 🌟 新增：UI 狀態記憶區 (用來記住目前展開的分類與標籤)
+// UI 狀態記憶區 (用來記住目前展開的分類與標籤)
 let openCategoryName = null;
 let activeFilterSubId = 'all';
+
+// 批量選取狀態
+let isBatchMode = false;
 
 // 打開收音機，連線到後端電台
 const socket = io();
@@ -598,7 +601,15 @@ function generateLinkCard(link, subName, subId) {
 
     return `
     <div class="swipe-container filterable-card" data-sub-id="${subId}" data-tags="${(link.tags || []).join(' ')}">
-        <a href="${link.url}" target="_blank" class="swipe-content link-card memo-style-card">
+        <!-- 批量模式的勾選框 -->
+        <div class="batch-checkbox" onclick="toggleBatchSelect(${link.id}, this)">
+            <div class="batch-circle">
+                <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+            </div>
+        </div>
+        <a href="${link.url}" target="_blank" class="swipe-content link-card memo-style-card" onclick="if(isBatchMode) { event.preventDefault(); toggleBatchSelect(${link.id}, this.previousElementSibling); }">
             <div class="card-text-area">
                 <div class="card-title">${link.title}</div>
                 
@@ -1131,6 +1142,7 @@ function enableDragScroll() {
         };
 
         slider.addEventListener('mousedown', (e) => {
+            if (isBatchMode) return;
             closeOtherSliders();
             isDown = true;
             isDragging = false;
@@ -1142,6 +1154,7 @@ function enableDragScroll() {
         });
 
         slider.addEventListener('touchstart', () => {
+            if (isBatchMode) return;
             closeOtherSliders();
         }, { passive: true });
 
@@ -1156,6 +1169,7 @@ function enableDragScroll() {
         });
 
         slider.addEventListener('mousemove', (e) => {
+            if (isBatchMode) return;
             if (!isDown) return;
             e.preventDefault();
             const x = e.pageX - slider.offsetLeft;
@@ -1707,7 +1721,7 @@ function toggleTagSelection(tag) {
     renderTagChips(); // 重新渲染畫面以更新藍色外觀
 }
 
-// 🌟 全新升級：直接在標籤區塊內新增標籤，無需跳出彈窗
+// 直接在標籤區塊內新增標籤，無需跳出彈窗
 function handleAddNewTagInline() {
     const newTag = prompt('請輸入新標籤名稱：');
     if (newTag && newTag.trim() !== '') {
@@ -1721,5 +1735,87 @@ function handleAddNewTagInline() {
             selectedTags.push(cleanTag);
         }
         renderTagChips();
+    }
+}
+
+// ================= 批量管理系統 (Batch Mode) =================
+let selectedBatchLinks = []; // 記憶勾選了哪些 ID
+
+function toggleBatchMode() {
+    isBatchMode = !isBatchMode;
+    const body = document.body;
+
+    if (isBatchMode) {
+        const sliders = document.querySelectorAll('.swipe-container');
+        sliders.forEach(slider => {
+            slider.style.scrollSnapType = 'none';
+            slider.style.scrollBehavior = 'auto'; // 設定 auto 代表「瞬間移動」，不播滑動動畫
+            slider.scrollLeft = 0;
+        });
+
+        body.classList.add('batch-mode-active');
+        selectedBatchLinks = []; // 清空選取狀態
+        updateBatchToolbar();
+
+        // 隱藏右下角新增按鈕
+        const fab = document.querySelector('[onclick*="openAddModal"]');
+        if (fab) fab.style.display = 'none';
+    } else {
+        body.classList.remove('batch-mode-active');
+        selectedBatchLinks = [];
+
+        // 拔除所有卡片的發亮狀態
+        document.querySelectorAll('.batch-checkbox.selected').forEach(el => el.classList.remove('selected'));
+
+        // 恢復新增按鈕
+        const fab = document.querySelector('[onclick*="openAddModal"]');
+        if (fab) fab.style.display = '';
+
+        setTimeout(() => {
+            const sliders = document.querySelectorAll('.swipe-container');
+            sliders.forEach(slider => {
+                slider.style.scrollSnapType = 'x mandatory';
+                slider.style.scrollBehavior = 'smooth';
+            });
+        }, 100);
+    }
+}
+
+// 點擊勾選框或卡片時觸發
+function toggleBatchSelect(linkId, element) {
+    if (!isBatchMode) return;
+
+    const index = selectedBatchLinks.indexOf(linkId);
+    if (index > -1) {
+        selectedBatchLinks.splice(index, 1);
+        element.classList.remove('selected');
+    } else {
+        selectedBatchLinks.push(linkId);
+        element.classList.add('selected');
+    }
+    updateBatchToolbar();
+}
+
+// 更新底部工具列數字與按鈕狀態
+function updateBatchToolbar() {
+    const countText = document.getElementById('batch-count-text');
+    if (countText) {
+        countText.textContent = `已選取 ${selectedBatchLinks.length} 項`;
+    }
+
+    const moveBtn = document.getElementById('batch-move-btn');
+    const delBtn = document.getElementById('batch-delete-btn');
+
+    // 如果沒選半個，按鈕變灰且不可按
+    if (selectedBatchLinks.length > 0) {
+        moveBtn.style.opacity = '1';
+        delBtn.style.opacity = '1';
+        moveBtn.style.pointerEvents = 'auto';
+        delBtn.style.pointerEvents = 'auto';
+    } else {
+        moveBtn.style.opacity = '0.4';
+        delBtn.style.opacity = '0.4';
+        moveBtn.style.pointerEvents = 'none';
+        delBtn.style.pointerEvents = 'none';
     }
 }

@@ -986,3 +986,86 @@ body {
     background-color: #e5e5ea;
     color: #666666;
 }
+
+/* ================= 批量管理模式 ================= */
+/* 🌟 隱藏勾選框 (預設狀態) */
+.batch-checkbox {
+    width: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: width 0.3s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+/* 🌟 勾選圓圈外觀 */
+.batch-circle {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2px solid #c7c7cc;
+    background-color: transparent;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.batch-circle svg {
+    width: 14px;
+    height: 14px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+/* 🌟 進入批量模式：展開勾選框 */
+body.batch-mode-active .batch-checkbox {
+    width: 44px;
+    /* 長出點擊空間 */
+    opacity: 1;
+}
+
+/* 🌟 勾選後的發亮狀態 */
+.batch-checkbox.selected .batch-circle {
+    background-color: #007AFF;
+    border-color: #007AFF;
+}
+
+.batch-checkbox.selected .batch-circle svg {
+    opacity: 1;
+}
+
+/* 🌟 底部工具列動畫設定 */
+#batch-toolbar {
+    position: fixed;
+    bottom: -100px;
+    /* 初始藏在畫面下方 */
+    left: 0;
+    width: 100%;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+    padding: 16px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: bottom 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+    z-index: 9999;
+}
+
+body.batch-mode-active #batch-toolbar {
+    bottom: 0;
+    /* 升起 */
+}
+
+/* 🌟 批量模式下，徹底鎖死卡片的左右滑動 */
+body.batch-mode-active .swipe-container {
+    overflow-x: hidden !important;
+    /* 直接拔除原生滾動條 */
+    touch-action: pan-y !important;
+    /* 確保只允許上下捲動網頁，徹底禁止左右滑動 */
+}

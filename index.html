@@ -110,6 +110,16 @@
                     <span style="transform: translateY(0px);">邀請連結</span>
                 </button>
 
+                <button onclick="toggleBatchMode(); toggleSideMenu();" class="menu-item-btn"
+                    style="display: flex; align-items: center; justify-content: flex-start; gap: 12px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9 11l3 3L22 4"></path>
+                        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+                    </svg>
+                    <span style="transform: translateY(0px);">批量管理</span>
+                </button>
+
                 <hr style="border: 0; border-top: 1px solid #e5e5ea; margin: 15px 0;">
 
                 <button onclick="handleLogout(); toggleSideMenu();" class="menu-item-btn logout-btn"
@@ -204,6 +214,16 @@
             </div>
         </div>
     </div>
+    </div>
+
+    <div id="batch-toolbar">
+        <span id="batch-count-text" style="font-size: 15px; font-weight: 500; color: #8e8e93;">已選取 0 項</span>
+        <div style="display: flex; gap: 12px;">
+            <button id="batch-move-btn" onclick="openBatchMoveModal()"
+                style="background: #007AFF; color: white; border: none; padding: 8px 16px; border-radius: 20px; font-weight: 600; cursor: pointer; transition: 0.2s;">搬移</button>
+            <button id="batch-delete-btn" onclick="executeBatchDelete()"
+                style="background: #FF3B30; color: white; border: none; padding: 8px 16px; border-radius: 20px; font-weight: 600; cursor: pointer; transition: 0.2s;">刪除</button>
+        </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
