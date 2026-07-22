@@ -1852,3 +1852,102 @@ async function executeBatchDelete() {
         alert("連線異常，請確認伺服器是否運作中。");
     }
 }
+
+// ================= 🌟 新增：批量搬移邏輯 =================
+
+// 1. 打開搬移視窗並載入選單
+async function openBatchMoveModal() {
+    if (selectedBatchLinks.length === 0) return;
+
+    document.getElementById('batch-move-modal').style.display = 'flex';
+    const catSelect = document.getElementById('batch-move-category');
+    const subSelect = document.getElementById('batch-move-subcategory');
+
+    catSelect.innerHTML = '<option value="" disabled selected>選擇目標大分類...</option>';
+    subSelect.style.display = 'none';
+    subSelect.innerHTML = '';
+
+    try {
+        const response = await fetch('/api/categories');
+        const categories = await response.json();
+
+        categories.forEach(cat => {
+            const catName = cat.name || cat.categoryName;
+            catSelect.innerHTML += `<option value="${cat.id}">📁 ${catName}</option>`;
+        });
+    } catch (error) {
+        console.error("載入分類失敗:", error);
+    }
+}
+
+// 2. 關閉搬移視窗
+function closeBatchMoveModal() {
+    document.getElementById('batch-move-modal').style.display = 'none';
+}
+
+// 3. 連動小分類的切換
+async function handleBatchMoveCategoryChange() {
+    const catId = document.getElementById('batch-move-category').value;
+    const subSelect = document.getElementById('batch-move-subcategory');
+
+    try {
+        const response = await fetch('/api/categories');
+        const categories = await response.json();
+        const selectedCat = categories.find(c => c.id == catId);
+
+        if (selectedCat) {
+            subSelect.style.display = 'block';
+            const catName = selectedCat.name || selectedCat.categoryName;
+            subSelect.innerHTML = `<option value="DIRECT" selected>📥 直接儲存在「${catName}」</option>`;
+
+            if (selectedCat.subcategories && selectedCat.subcategories.length > 0) {
+                selectedCat.subcategories.forEach(sub => {
+                    subSelect.innerHTML += `<option value="${sub.id}">↳ ${sub.name}</option>`;
+                });
+            }
+        }
+    } catch (error) {
+        console.error("載入分類失敗:", error);
+    }
+}
+
+// 4. 點擊確認：發送 API 執行搬移
+async function executeBatchMove() {
+    const catSelect = document.getElementById('batch-move-category');
+    const subSelect = document.getElementById('batch-move-subcategory');
+
+    if (!catSelect.value) {
+        return alert("請選擇要搬移到哪一個大分類！");
+    }
+
+    const categoryId = parseInt(catSelect.value);
+    let subcategoryId = null;
+
+    if (subSelect.value !== "DIRECT" && subSelect.value !== "") {
+        subcategoryId = parseInt(subSelect.value);
+    }
+
+    try {
+        const response = await fetch('/api/links/batch/move', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                link_ids: selectedBatchLinks,
+                category_id: categoryId,
+                subcategory_id: subcategoryId
+            })
+        });
+
+        if (response.ok) {
+            closeBatchMoveModal();
+            toggleBatchMode(); // 🌟 優雅退場：搬完直接退出批量模式，恢復原狀
+            if (typeof fetchAndRenderApp === 'function') fetchAndRenderApp();
+        } else {
+            const data = await response.json();
+            alert("搬移失敗：" + (data.error || "未知錯誤"));
+        }
+    } catch (error) {
+        console.error("批量搬移發生錯誤：", error);
+        alert("連線異常，請確認伺服器是否運作中。");
+    }
+}

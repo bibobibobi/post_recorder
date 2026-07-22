@@ -751,6 +751,56 @@ def batch_delete_links():
         db.session.rollback() # 發生錯誤時退回，保護資料庫安全
         print(f"批量刪除失敗: {e}")
         return {"error": "資料庫刪除失敗"}, 500
+    
+# ================= 🌟 新增：批量搬移連結 =================
+@app.route('/api/links/batch/move', methods=['PUT'])
+def batch_move_links():
+    user = get_current_user()
+    if not user:
+        return {"error": "未登入"}, 401
+
+    group_id = get_requested_group_id(user)
+    if not group_id:
+        return {"error": "找不到指定的群組或權限不足"}, 403
+
+    data = request.json
+    link_ids = data.get('link_ids', [])
+    target_category_id = data.get('category_id')
+    target_subcategory_id = data.get('subcategory_id')
+
+    if not link_ids or not isinstance(link_ids, list):
+        return {"error": "沒有提供要搬移的連結"}, 400
+    
+    if not target_category_id:
+        return {"error": "必須指定目標大分類"}, 400
+
+    try:
+        # 1. 安全檢查：確認目標分類真的存在且屬於目前的群組
+        target_cat = Category.query.filter_by(id=target_category_id, group_id=group_id).first()
+        if not target_cat:
+            return {"error": "無效的目標分類"}, 400
+
+        # 2. 抓出所有要搬移的連結
+        links_to_move = Link.query.join(Category).filter(
+            Link.id.in_(link_ids),
+            Category.group_id == group_id
+        ).all()
+
+        # 3. 執行搬移 (修改它們的所屬 ID)
+        for link in links_to_move:
+            link.category_id = target_category_id
+            link.subcategory_id = target_subcategory_id
+
+        # 4. 儲存變更並發送即時廣播
+        db.session.commit()
+        socketio.emit('workspace_updated', room=f"group_{group_id}")
+        
+        return {"message": f"成功搬移 {len(links_to_move)} 筆連結！"}, 200
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"批量搬移失敗: {e}")
+        return {"error": "資料庫更新失敗"}, 500
 
 # 編輯連結
 @app.route('/api/links/<int:link_id>', methods=['PUT'])
