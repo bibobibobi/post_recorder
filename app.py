@@ -658,7 +658,7 @@ def rename_tag():
         db.session.rollback()
         return jsonify({"error": f"修改標籤失敗: {str(e)}"}), 500
 
-
+# 刪除標籤
 @app.route('/api/tags', methods=['DELETE'])
 def delete_tag():
     data = request.get_json()
@@ -712,6 +712,45 @@ def delete_link(link_id):
     except Exception as e:
         db.session.rollback()
         return {"error": str(e)}, 500
+    
+# 批量刪除連結
+@app.route('/api/links/batch', methods=['DELETE'])
+def batch_delete_links():
+    user = get_current_user()
+    if not user:
+        return {"error": "未登入"}, 401
+
+    group_id = get_requested_group_id(user)
+    if not group_id:
+        return {"error": "找不到指定的群組或權限不足"}, 403
+
+    data = request.json
+    link_ids = data.get('link_ids', [])
+
+    if not link_ids or not isinstance(link_ids, list):
+        return {"error": "沒有提供要刪除的連結或格式錯誤"}, 400
+
+    try:
+        # 1. 嚴謹的權限控管：找出 ID 在清單內，且真的屬於這個群組大分類的連結
+        links_to_delete = Link.query.join(Category).filter(
+            Link.id.in_(link_ids),
+            Category.group_id == group_id
+        ).all()
+
+        # 2. 執行刪除
+        for link in links_to_delete:
+            db.session.delete(link)
+        
+        # 3. 儲存變更並發送即時廣播
+        db.session.commit()
+        socketio.emit('workspace_updated', room=f"group_{group_id}")
+        
+        return {"message": f"成功刪除 {len(links_to_delete)} 筆連結！"}, 200
+
+    except Exception as e:
+        db.session.rollback() # 發生錯誤時退回，保護資料庫安全
+        print(f"批量刪除失敗: {e}")
+        return {"error": "資料庫刪除失敗"}, 500
 
 # 編輯連結
 @app.route('/api/links/<int:link_id>', methods=['PUT'])

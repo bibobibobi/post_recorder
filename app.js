@@ -1819,3 +1819,36 @@ function updateBatchToolbar() {
         delBtn.style.pointerEvents = 'none';
     }
 }
+
+// ================= 🌟 新增：執行批量刪除 =================
+async function executeBatchDelete() {
+    // 防呆：如果沒選半個就不動作
+    if (selectedBatchLinks.length === 0) return;
+
+    // 再次確認，避免誤觸
+    if (!confirm(`⚠️ 確定要永久刪除這 ${selectedBatchLinks.length} 個收藏嗎？\n此動作無法復原！`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/links/batch', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            // 將我們記憶體中的 ID 陣列打包送出
+            body: JSON.stringify({ link_ids: selectedBatchLinks })
+        });
+
+        if (response.ok) {
+            // 刪除成功：退出批量模式，這會自動幫我們把畫面恢復原狀
+            toggleBatchMode();
+            // 雖然有 WebSocket 廣播，但為了確保本地端立刻反應，直接手動重繪一次
+            if (typeof fetchAndRenderApp === 'function') fetchAndRenderApp();
+        } else {
+            const data = await response.json();
+            alert("刪除失敗：" + (data.error || "未知錯誤"));
+        }
+    } catch (error) {
+        console.error("批量刪除發生錯誤：", error);
+        alert("連線異常，請確認伺服器是否運作中。");
+    }
+}
