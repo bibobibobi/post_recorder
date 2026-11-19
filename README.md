@@ -97,25 +97,25 @@ PostgreSQL Firebase   外部 API
 
 ### 登入與帳號管理
 
-<img alt="登入介面" src="https://github.com/user-attachments/assets/4e92a5b2-4088-4338-a9fa-1d07e0322a7c" width="200">
+<img alt="登入介面" src="https://github.com/user-attachments/assets/4e92a5b2-4088-4338-a9fa-1d07e0322a7c" width="250">
 
 
 ### 收藏管理首頁
 
-<img alt="首頁" src="https://github.com/user-attachments/assets/c79f8679-d205-4578-b042-8195683563ea" width="200">
+<img alt="首頁" src="https://github.com/user-attachments/assets/c79f8679-d205-4578-b042-8195683563ea" width="250">
 
 ### 新增收藏與分類設定
 
-<img alt="新增功能" src="https://github.com/user-attachments/assets/021c9f11-47ab-4052-95a1-426abf4e9a05" width="200">
+<img alt="新增功能" src="https://github.com/user-attachments/assets/021c9f11-47ab-4052-95a1-426abf4e9a05" width="250">
 
 ### 分類與標籤管理
 
-<img alt="分類管理" src="https://github.com/user-attachments/assets/1864b427-7f14-4145-aca9-20dfe634b3db" width="200">
+<img alt="分類管理" src="https://github.com/user-attachments/assets/1864b427-7f14-4145-aca9-20dfe634b3db" width="250">
 
 ### 群組協作與批次管理
 
-<img alt="功能選單" src="https://github.com/user-attachments/assets/f029abbc-48b8-42fd-a34a-0435f3ebabda" width="200">
-<img alt="批次功能" src="https://github.com/user-attachments/assets/6fa11eac-478e-4694-9dff-679f79d03a91" width="200">
+<img alt="功能選單" src="https://github.com/user-attachments/assets/f029abbc-48b8-42fd-a34a-0435f3ebabda" width="250">
+<img alt="批次功能" src="https://github.com/user-attachments/assets/6fa11eac-478e-4694-9dff-679f79d03a91" width="250">
 
 ## 本機執行
 
